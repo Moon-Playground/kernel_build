@@ -13,7 +13,7 @@ function parse_parameters() {
 }
 
 function do_clang(){
-	wget "$CLANG_URL" > /dev/null || { echo "Download failed!"; exit 1; }
+	aria2c --file-allocation=falloc -x16 -s16 "$CLANG_URL" || { echo "Download failed!"; exit 1; }
 	mkdir -p clang
 	cd clang
 	if [[ "$CLANG_NAME" == *.tar.xz ]]; then
@@ -42,6 +42,10 @@ function do_kernel(){
 	mkdir -p "$BASE_DIR"/Logs
 
 	cd "$BASE_DIR"/kernel
+	if [ $(uname -m) == "aarch64" ]; then
+		rm tools/build/cpio
+		ln -sf $(which cpio) tools/build/cpio
+	fi
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$DEFCONFIG"_defconfig || { echo "Defconfig failed!"; exit 1; }
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 -j"$CORES"  > >(tee ../Logs/stdout.log) 2> >(tee ../Logs/stderr.log) || { echo "Kernel build failed!"; exit 1; }
 }

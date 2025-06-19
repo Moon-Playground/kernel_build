@@ -1,4 +1,4 @@
-name: Build Kernel
+name: Build Kernel on AArch64
 
 on:
   workflow_dispatch:
@@ -45,10 +45,13 @@ on:
         default: 'mediatek/mt6768.dtb'
 
 jobs:
-  build_ksu:
-    runs-on: ubuntu-latest
+  build_kernel:
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        susfs: [0, 1]
     container:
-      image: wulan17/debian:latest
+      image: wulan17/debian-aarch64:latest
     steps:
       - name: Checkout script
         uses: actions/checkout@v4
@@ -56,7 +59,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt update && apt upgrade -y
-          apt install -y ccache wget bc build-essential make autoconf automake git bison pahole flex libssl-dev zip jq
+          apt install -y ccache wget bc build-essential make autoconf automake git bison pahole flex libssl-dev zip jq cpio aria2
 
       - name: Clone kernel
         uses: actions/checkout@v4
@@ -67,7 +70,8 @@ jobs:
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ssh-strict: "false"
 
-      - name: Clone kernelsu
+      - name: Clone kernelsu (Non-SUSFS)
+        if: ${{ matrix.susfs == 0 }}
         uses: actions/checkout@v4
         with:
           repository: ${{ github.event.inputs.kernelsu_repo }}
@@ -76,55 +80,8 @@ jobs:
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ssh-strict: "false"
 
-      - name: Write Config
-        run: bash build.sh write_config
-        env:
-          DEFCONFIG: ${{ github.event.inputs.kernelsu_defconfig }}
-          IS_SUSFS: 0
-          KERNEL_IMG: ${{ github.event.inputs.kernel_img }}
-          KERNEL_DTB: ${{ github.event.inputs.kernel_dtb }}
-
-      - name: Build Kernel
-        run: bash build.sh kernel
-
-      - name: Compress AnyKernel
-        run: bash build.sh anykernel
-
-      - name: Upload logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: build-logs-ksu
-          path: Logs/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mayuri-kernel-ksu
-          path: dist/
-
-  build_susfs:
-    runs-on: ubuntu-latest
-    container:
-      image: wulan17/debian:latest
-    steps:
-      - name: Checkout script
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          apt update && apt upgrade -y
-          apt install -y ccache wget bc build-essential make autoconf automake git bison pahole flex libssl-dev zip jq
-      - name: Clone kernel
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.inputs.kernel_repo }}
-          path: kernel
-          ref: ${{ github.event.inputs.kernel_branch }}
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-strict: "false"
-
-      - name: Clone kernelsu
+      - name: Clone kernelsu (SUSFS)
+        if: ${{ matrix.susfs == 1 }}
         uses: actions/checkout@v4
         with:
           repository: ${{ github.event.inputs.kernelsu_susfs_repo }}
@@ -133,13 +90,26 @@ jobs:
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ssh-strict: "false"
 
-      - name: Write Config
+      - name: Write Config (Non-SUSFS)
+        if: ${{ matrix.susfs == 0 }}
+        run: bash build.sh write_config
+        env:
+          DEFCONFIG: ${{ github.event.inputs.kernelsu_defconfig }}
+          IS_SUSFS: ${{ matrix.susfs }}
+          KERNEL_IMG: ${{ github.event.inputs.kernel_img }}
+          KERNEL_DTB: ${{ github.event.inputs.kernel_dtb }}
+
+      - name: Write Config (SUSFS)
+        if: ${{ matrix.susfs == 1 }}
         run: bash build.sh write_config
         env:
           DEFCONFIG: ${{ github.event.inputs.kernelsu_susfs_defconfig }}
-          IS_SUSFS: 1
+          IS_SUSFS: ${{ matrix.susfs }}
           KERNEL_IMG: ${{ github.event.inputs.kernel_img }}
           KERNEL_DTB: ${{ github.event.inputs.kernel_dtb }}
+
+      - name: Setup Clang
+        run: bash build.sh clang
 
       - name: Build Kernel
         run: bash build.sh kernel
@@ -147,14 +117,29 @@ jobs:
       - name: Compress AnyKernel
         run: bash build.sh anykernel
 
-      - name: Upload logs
+      - name: Upload logs (Non-SUSFS)
+        if: ${{ always() && matrix.susfs == 0 }}
         uses: actions/upload-artifact@v4
-        if: always()
+        with:
+          name: build-logs-ksu
+          path: Logs/
+
+      - name: Upload logs (SUSFS)
+        if: ${{ always() && matrix.susfs == 1 }}
+        uses: actions/upload-artifact@v4
         with:
           name: build-logs-susfs
           path: Logs/
 
-      - name: Upload artifacts
+      - name: Upload artifacts (Non-SUSFS)
+        if: ${{ matrix.susfs == 0 }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mayuri-kernel-ksu
+          path: dist/
+
+      - name: Upload artifacts (SUSFS)
+        if: ${{ matrix.susfs == 1 }}
         uses: actions/upload-artifact@v4
         with:
           name: mayuri-kernel-susfs
