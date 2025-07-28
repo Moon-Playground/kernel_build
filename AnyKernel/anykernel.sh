@@ -4,7 +4,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=Mayuri Kernel rksu+susfs for gale
+kernel.string=
 do.devicecheck=1
 do.modules=0
 do.systemless=1

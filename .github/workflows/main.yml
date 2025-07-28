@@ -6,23 +6,23 @@ on:
       kernel_repo:
         description: 'Kernel repository to build'
         required: true
-        default: 'Mayuri-Chan/android_kernel_xiaomi_gale-ksu'
+        default: 'Mayuri-Chan/android_kernel_xiaomi_gale'
       kernel_branch:
         description: 'Kernel branch to build'
         required: true
-        default: 'master'
+        default: 'stable'
       kernelsu_repo:
         description: 'Kernelsu repository to build'
         required: true
         default: 'MayuriLabs/KernelSU'
+      kernel_defconfig:
+        description: 'defconfig to build the kernel'
+        required: true
+        default: 'gale_defconfig'
       kernelsu_branch:
         description: 'Kernelsu branch to build'
         required: true
         default: 'main'
-      kernelsu_defconfig:
-        description: 'Kernelsu defconfig to build'
-        required: true
-        default: 'gale-ksu'
       kernelsu_susfs_repo:
         description: 'SUSFS repository to build'
         required: true
@@ -31,10 +31,6 @@ on:
         description: 'SUSFS branch to build'
         required: true
         default: 'susfs-main'
-      kernelsu_susfs_defconfig:
-        description: 'SUSFS defconfig to build'
-        required: true
-        default: 'gale-susfs'
       kernel_img:
         description: 'Kernel image name'
         required: false
@@ -49,7 +45,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
-        susfs: [0, 1]
+        build_type: ["normal", "ksu", "susfs"]
     container:
       image: wulan17/debian-aarch64:latest
     steps:
@@ -59,7 +55,10 @@ jobs:
       - name: Install dependencies
         run: |
           apt update && apt upgrade -y
-          apt install -y ccache wget bc build-essential make autoconf automake git bison pahole flex libssl-dev zip jq cpio aria2
+          apt install -y ccache wget bc build-essential make autoconf automake git bison pahole flex libssl-dev zip jq cpio aria2 gh
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Clone kernel
         uses: actions/checkout@v4
@@ -71,7 +70,7 @@ jobs:
           ssh-strict: "false"
 
       - name: Clone kernelsu (Non-SUSFS)
-        if: ${{ matrix.susfs == 0 }}
+        if: ${{ matrix.build_type == 'ksu' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ github.event.inputs.kernelsu_repo }}
@@ -81,7 +80,7 @@ jobs:
           ssh-strict: "false"
 
       - name: Clone kernelsu (SUSFS)
-        if: ${{ matrix.susfs == 1 }}
+        if: ${{ matrix.build_type == 'susfs' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ github.event.inputs.kernelsu_susfs_repo }}
@@ -90,21 +89,11 @@ jobs:
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ssh-strict: "false"
 
-      - name: Write Config (Non-SUSFS)
-        if: ${{ matrix.susfs == 0 }}
+      - name: Write Config
         run: bash build.sh write_config
         env:
-          DEFCONFIG: ${{ github.event.inputs.kernelsu_defconfig }}
-          IS_SUSFS: ${{ matrix.susfs }}
-          KERNEL_IMG: ${{ github.event.inputs.kernel_img }}
-          KERNEL_DTB: ${{ github.event.inputs.kernel_dtb }}
-
-      - name: Write Config (SUSFS)
-        if: ${{ matrix.susfs == 1 }}
-        run: bash build.sh write_config
-        env:
-          DEFCONFIG: ${{ github.event.inputs.kernelsu_susfs_defconfig }}
-          IS_SUSFS: ${{ matrix.susfs }}
+          KERNEL_DEFCONFIG: ${{ github.event.inputs.kernel_defconfig }}
+          BUILD_TYPE: ${{ matrix.build_type }}
           KERNEL_IMG: ${{ github.event.inputs.kernel_img }}
           KERNEL_DTB: ${{ github.event.inputs.kernel_dtb }}
 
@@ -117,30 +106,26 @@ jobs:
       - name: Compress AnyKernel
         run: bash build.sh anykernel
 
+      - name: Upload logs (Non-KSU)
+        if: ${{ always() && matrix.build_type == 'normal' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-normal
+          path: Logs/
+
       - name: Upload logs (Non-SUSFS)
-        if: ${{ always() && matrix.susfs == 0 }}
+        if: ${{ always() && matrix.build_type == 'ksu' }}
         uses: actions/upload-artifact@v4
         with:
           name: build-logs-ksu
           path: Logs/
 
       - name: Upload logs (SUSFS)
-        if: ${{ always() && matrix.susfs == 1 }}
+        if: ${{ always() && matrix.build_type == 'susfs' }}
         uses: actions/upload-artifact@v4
         with:
           name: build-logs-susfs
           path: Logs/
 
-      - name: Upload artifacts (Non-SUSFS)
-        if: ${{ matrix.susfs == 0 }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mayuri-kernel-ksu
-          path: dist/
-
-      - name: Upload artifacts (SUSFS)
-        if: ${{ matrix.susfs == 1 }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mayuri-kernel-susfs
-          path: dist/
+      - name: Release kernel
+        run: bash build.sh release
