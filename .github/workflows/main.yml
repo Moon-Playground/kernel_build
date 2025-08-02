@@ -14,7 +14,7 @@ on:
       kernelsu_repo:
         description: 'Kernelsu repository to build'
         required: true
-        default: 'MayuriLabs/KernelSU'
+        default: 'rsuntk/KernelSU'
       kernel_defconfig:
         description: 'defconfig to build the kernel'
         required: true
@@ -26,7 +26,7 @@ on:
       kernelsu_susfs_repo:
         description: 'SUSFS repository to build'
         required: true
-        default: 'MayuriLabs/KernelSU'
+        default: 'rsuntk/KernelSU'
       kernelsu_susfs_branch:
         description: 'SUSFS branch to build'
         required: true
@@ -39,6 +39,7 @@ on:
         description: 'Kernel dtb name'
         required: false
         default: 'mediatek/mt6768.dtb'
+
 
 jobs:
   build_kernel:
