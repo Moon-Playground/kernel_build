@@ -149,6 +149,7 @@ function do_release() {
     TITLE="$DEVICE_TITLE ($(env TZ='Asia/Jakarta' date +%Y%m%d)) ($GITHUB_RUN_ID)"
     NOTES="""$KERNEL_NAME Kernel
 Device: $DEVICE_TITLE
+Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)
 Build date: $(env TZ='Asia/Jakarta' date +%Y%m%d)
 Workflows id: $GITHUB_RUN_ID"""
 
