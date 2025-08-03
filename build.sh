@@ -102,7 +102,7 @@ function do_kernel(){
 		if [[ -n "$local_version_line" ]]; then
 			export LOCAL_VERSION="$current_local_version"-"ඞ"
 		else
-			export LOCAL_VERSION="-$KERNEL_NAME-susfs-ඞ"
+			export LOCAL_VERSION="-$KERNEL_NAME-ඞ"
 		fi
 	else
 		if [[ -z "$local_version_line" ]]; then
