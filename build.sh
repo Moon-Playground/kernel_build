@@ -142,14 +142,15 @@ function do_release() {
     # Upload to GitHub Releases using GitHub CLI
     file_name="$ZIP_NAME".zip
 
-    TAG="$DEVICE"-"$(env TZ='Asia/Jakarta' date +%Y%m%d)"
+    TAG="$DEVICE"-"$GITHUB_RUN_ID"
     ASSET="$BASE_DIR/dist/$file_name"
     REPO="$GITHUB_REPOSITORY"
     DEVICE_TITLE="${DEVICE^}"
-    TITLE="$DEVICE_TITLE ($(env TZ='Asia/Jakarta' date +%Y%m%d))"
+    TITLE="$DEVICE_TITLE ($(env TZ='Asia/Jakarta' date +%Y%m%d)) ($GITHUB_RUN_ID)"
     NOTES="""$KERNEL_NAME Kernel
 Device: $DEVICE_TITLE
-Build date: $(env TZ='Asia/Jakarta' date +%Y%m%d)"""
+Build date: $(env TZ='Asia/Jakarta' date +%Y%m%d)
+Workflows id: $GITHUB_RUN_ID"""
 
     # Check if release exists
     if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
