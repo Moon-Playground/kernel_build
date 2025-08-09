@@ -1,6 +1,6 @@
-From c887da51a08990709937f1d87162456c4ce35bf6 Mon Sep 17 00:00:00 2001
-From: rsuntk <rissu.ntk@gmail.com>
-Date: Thu, 12 Jun 2025 08:16:45 +0000
+From a1dd59bbaf89f6040bad860f10f245644c6b6b08 Mon Sep 17 00:00:00 2001
+From: rsuntk <90097027+rsuntk@users.noreply.github.com>
+Date: Mon, 4 Aug 2025 15:11:47 +0700
 Subject: [PATCH] Susfs Patch
 
 Signed-off-by: rsuntk <rissu.ntk@gmail.com>
@@ -620,7 +620,7 @@ index 772bae69dbbb..313538342a8e 100644
  	return filp;
  }
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 87a757b2e06c..cae2d2ab6214 100644
+index 87a757b2e06c..ace8dc7a264f 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -26,10 +26,36 @@
@@ -920,7 +920,7 @@ index 87a757b2e06c..cae2d2ab6214 100644
  {
  	struct mount *res, *p, *q, *r, *parent;
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-+	bool is_current_zygote_domain = susfs_is_current_zygote_domain();
++	bool is_zygote_not_copy_mnt_ns = (susfs_is_current_zygote_domain() && !(flag & CL_COPY_MNT_NS));
 +#endif
  
  	if (!(flag & CL_COPY_UNBINDABLE) && IS_MNT_UNBINDABLE(mnt))
@@ -935,14 +935,13 @@ index 87a757b2e06c..cae2d2ab6214 100644
  		if (!is_subdir(r->mnt_mountpoint, dentry))
  			continue;
  
-@@ -1789,6 +1998,14 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
+@@ -1789,6 +1998,13 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
  			q = clone_mnt(p, p->mnt.mnt_root, flag);
  			if (IS_ERR(q))
  				goto out;
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-+			if (is_current_zygote_domain
-+				&& !(flag & CL_COPY_MNT_NS)
-+				&& q->mnt_id < DEFAULT_SUS_MNT_ID) {
++			if (is_zygote_not_copy_mnt_ns &&
++				q->mnt_id < DEFAULT_SUS_MNT_ID) {
 +				attach_mnt_count++;
 +				q->mnt_id += attach_mnt_count;
 +			}
@@ -950,7 +949,7 @@ index 87a757b2e06c..cae2d2ab6214 100644
  			lock_mount_hash();
  			list_add_tail(&q->mnt_list, &res->mnt_list);
  			attach_mnt(q, parent, p->mnt_mp);
-@@ -2254,6 +2471,27 @@ static int do_loopback(struct path *path, const char *old_name,
+@@ -2254,6 +2470,27 @@ static int do_loopback(struct path *path, const char *old_name,
  		umount_tree(mnt, UMOUNT_SYNC);
  		unlock_mount_hash();
  	}
@@ -978,7 +977,7 @@ index 87a757b2e06c..cae2d2ab6214 100644
  out2:
  	unlock_mount(mp);
  out:
-@@ -2853,6 +3091,15 @@ long do_mount(const char *dev_name, const char __user *dir_name,
+@@ -2853,6 +3090,15 @@ long do_mount(const char *dev_name, const char __user *dir_name,
  	else
  		retval = do_new_mount(&path, type_page, sb_flags, mnt_flags,
  				      dev_name, data_page);
@@ -994,7 +993,7 @@ index 87a757b2e06c..cae2d2ab6214 100644
  dput_out:
  	path_put(&path);
  	return retval;
-@@ -2930,6 +3177,10 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+@@ -2930,6 +3176,10 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
  	struct mount *old;
  	struct mount *new;
  	int copy_flags;
@@ -1005,7 +1004,7 @@ index 87a757b2e06c..cae2d2ab6214 100644
  
  	BUG_ON(!ns);
  
-@@ -2949,6 +3200,11 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+@@ -2949,6 +3199,11 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
  	copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;
  	if (user_ns != ns->user_ns)
  		copy_flags |= CL_SHARED_TO_SLAVE | CL_UNPRIVILEGED;
@@ -1017,33 +1016,40 @@ index 87a757b2e06c..cae2d2ab6214 100644
  	new = copy_tree(old, old->mnt.mnt_root, copy_flags);
  	if (IS_ERR(new)) {
  		namespace_unlock();
-@@ -2985,6 +3241,25 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+@@ -2965,6 +3220,12 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+ 	 */
+ 	p = old;
+ 	q = new;
++#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
++	if (likely(is_zygote_pid)) {
++		last_entry_mnt_id = new->mnt_id;
++		q->mnt.susfs_mnt_id_backup = new->mnt_id;
++	}
++#endif
+ 	while (p) {
+ 		q->mnt_ns = new_ns;
+ 		new_ns->mounts++;
+@@ -2982,9 +3243,19 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+ 		q = next_mnt(q, new);
+ 		if (!q)
+ 			break;
++#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
++		// Here We are only interested in processes of which original mnt namespace belongs to zygote
++		if (likely(is_zygote_pid && (q->mnt_id < DEFAULT_SUS_MNT_ID))) {
++			// q->mnt.susfs_mnt_id_backup -> original mnt_id
++			// q->mnt_id -> to be modified to the fake mnt_id
++			q->mnt.susfs_mnt_id_backup = q->mnt_id;
++			q->mnt_id = ++last_entry_mnt_id;
++		}
++#endif
  		while (p->mnt.mnt_root != q->mnt.mnt_root)
  			p = next_mnt(p, old);
  	}
-+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-+	// current->susfs_last_fake_mnt_id -> to record last valid fake mnt_id to zygote pid
-+	// q->mnt.susfs_mnt_id_backup -> original mnt_id
-+	// q->mnt_id -> will be modified to the fake mnt_id
-+
-+	// Here We are only interested in processes of which original mnt namespace belongs to zygote 
-+	// Also we just make use of existing 'q' mount pointer, no need to delcare extra mount pointer
-+	if (is_zygote_pid) {
-+		last_entry_mnt_id = list_first_entry(&new_ns->list, struct mount, mnt_list)->mnt_id;
-+		list_for_each_entry(q, &new_ns->list, mnt_list) {
-+			if (unlikely(q->mnt_id >= DEFAULT_SUS_MNT_ID)) {
-+				continue;
-+			}
-+			q->mnt.susfs_mnt_id_backup = q->mnt_id;
-+			q->mnt_id = last_entry_mnt_id++;
-+		}
-+	}
-+#endif
 +
  	namespace_unlock();
  
  	if (rootmnt)
-@@ -3531,3 +3806,37 @@ const struct proc_ns_operations mntns_operations = {
+@@ -3531,3 +3802,37 @@ const struct proc_ns_operations mntns_operations = {
  	.install	= mntns_install,
  	.owner		= mntns_owner,
  };
@@ -3516,20 +3522,21 @@ index b8ec1dbd1be5..6c48a53a88ea 100644
  }
  
 diff --git a/kernel/sys.c b/kernel/sys.c
-index a97e2fd55dfc..e12ad33d4e73 100644
+index a97e2fd55dfc..c166c12a41eb 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
-@@ -1251,6 +1251,9 @@ static int override_release(char __user *release, size_t len)
+@@ -1251,6 +1251,10 @@ static int override_release(char __user *release, size_t len)
  	return ret;
  }
  
 +#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
 +extern void susfs_spoof_uname(struct new_utsname* tmp);
 +#endif
++
  SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
  {
  	struct new_utsname tmp;
-@@ -1264,6 +1267,9 @@ SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
+@@ -1264,6 +1268,9 @@ SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
  		pr_debug("fake uname: %s/%d release=%s\n",
  			 current->comm, current->pid, tmp.release);
  	}
@@ -3540,5 +3547,5 @@ index a97e2fd55dfc..e12ad33d4e73 100644
  	if (copy_to_user(name, &tmp, sizeof(tmp)))
  		return -EFAULT;
 -- 
-2.50.1
+2.39.5
 
