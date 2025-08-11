@@ -70,23 +70,13 @@ jobs:
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ssh-strict: "false"
 
-      - name: Clone kernelsu (Non-SUSFS)
-        if: ${{ matrix.build_type == 'ksu' }}
+      - name: Clone kernelsu
+        if: ${{ matrix.build_type == 'ksu' || matrix.build_type == 'susfs' }}
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.inputs.kernelsu_repo }}
+          repository: ${{ matrix.build_type == 'ksu' && github.event.inputs.kernelsu_repo || github.event.inputs.kernelsu_susfs_repo }}
           path: kernel/KernelSU
-          ref: ${{ github.event.inputs.kernelsu_branch }}
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-strict: "false"
-
-      - name: Clone kernelsu (SUSFS)
-        if: ${{ matrix.build_type == 'susfs' }}
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.inputs.kernelsu_susfs_repo }}
-          path: kernel/KernelSU
-          ref: ${{ github.event.inputs.kernelsu_susfs_branch }}
+          ref: ${{ matrix.build_type == 'ksu' && github.event.inputs.kernelsu_branch || github.event.inputs.kernelsu_susfs_branch }}
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ssh-strict: "false"
 
@@ -107,25 +97,11 @@ jobs:
       - name: Compress AnyKernel
         run: bash build.sh anykernel
 
-      - name: Upload logs (Non-KSU)
-        if: ${{ always() && matrix.build_type == 'normal' }}
+      - name: Upload logs
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-normal
-          path: Logs/
-
-      - name: Upload logs (Non-SUSFS)
-        if: ${{ always() && matrix.build_type == 'ksu' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-ksu
-          path: Logs/
-
-      - name: Upload logs (SUSFS)
-        if: ${{ always() && matrix.build_type == 'susfs' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-susfs
+          name: ${{ matrix.build_type }}-build-logs
           path: Logs/
 
       - name: Release kernel
