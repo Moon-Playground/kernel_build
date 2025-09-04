@@ -120,6 +120,7 @@ function do_anykernel(){
 		echo "Compressing output..."
 		cp "$KERN_IMG" "$ZIP_DIR"/Image.gz
 		cp "$DTB_PATH" "$ZIP_DIR"/dtb
+		cp "$BASE_DIR"/out/arch/"$ARCH"/boot/dts/mediatek/"$DEVICE".dtbo "$ZIP_DIR"/dtbo.img
 		cd "$ZIP_DIR"
 		if [[ "$B_TYPE" == "susfs" ]]; then
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel rksu+susfs for $DEVICE#g" anykernel.sh
