@@ -145,11 +145,11 @@ function do_release() {
     ASSET="$BASE_DIR/dist/$file_name"
     REPO="$GITHUB_REPOSITORY"
     DEVICE_TITLE="${DEVICE^}"
-    TITLE="$DEVICE_TITLE ($(env TZ='Asia/Jakarta' date +%Y%m%d)) ($GITHUB_RUN_ID)"
+    TITLE="$DEVICE_TITLE ($(env TZ='UTC' date +%Y%m%d)) ($GITHUB_RUN_ID)"
     NOTES="""$KERNEL_NAME Kernel
 Device: $DEVICE_TITLE
 Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)
-Build date: $(env TZ='Asia/Jakarta' date +%Y%m%d)
+Build date: $(env TZ='UTC' date +%Y%m%d)
 Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"""
 
     # Check if release exists
