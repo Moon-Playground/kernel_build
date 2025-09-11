@@ -150,7 +150,7 @@ function do_release() {
 Device: $DEVICE_TITLE
 Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)
 Build date: $(env TZ='Asia/Jakarta' date +%Y%m%d)
-Workflows id: $GITHUB_RUN_ID"""
+Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"""
 
     # Check if release exists
     if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
