@@ -23,6 +23,7 @@ export B_TYPE
 export DEVICE
 export KERN_IMG
 export DTB_PATH
+export DTBO_PATH
 export KERN_DEFCONFIG
 # END OF DO NOT EDIT
 

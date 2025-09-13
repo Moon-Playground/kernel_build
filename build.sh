@@ -37,6 +37,8 @@ function do_write_config() {
 	sed -i "s#export KERN_IMG#export KERN_IMG=\"$BASE_DIR/out/arch/$ARCH/boot/$KERNEL_IMG\"#g" "$BASE_DIR"/config.sh
 	sed -i "s#export DTB_PATH#export DTB_PATH=\"$BASE_DIR/out/arch/$ARCH/boot/dts/$KERNEL_DTB\"#g" "$BASE_DIR"/config.sh
 	sed -i "s#export KERN_DEFCONFIG#export KERN_DEFCONFIG=\"$KERNEL_DEFCONFIG\"#g" "$BASE_DIR"/config.sh
+	DTBO_NAME=$(grep '^CONFIG_BUILD_ARM64_DTB_OVERLAY_IMAGE_NAMES=' "$BASE_DIR"/arch/arm64/configs/"$KERNEL_DEFCONFIG"  | sed -n 's/^CONFIG_BUILD_ARM64_DTB_OVERLAY_IMAGE_NAMES="mediatek\/\([^"]*\)"/\1/p')
+	sed -i "s#export DTBO_PATH#export DTBO_PATH=\"$BASE_DIR/out/arch/$ARCH/boot/dts/$DTBO_NAME.dtbo\"#g" "$BASE_DIR"/config.sh
 }
 
 
@@ -120,7 +122,7 @@ function do_anykernel(){
 		echo "Compressing output..."
 		cp "$KERN_IMG" "$ZIP_DIR"/Image.gz
 		cp "$DTB_PATH" "$ZIP_DIR"/dtb
-		cp "$BASE_DIR"/out/arch/"$ARCH"/boot/dts/mediatek/"$DEVICE".dtbo "$ZIP_DIR"/dtbo.img
+		cp "$DTBO_PATH" "$ZIP_DIR"/dtbo.img
 		cd "$ZIP_DIR"
 		if [[ "$B_TYPE" == "susfs" ]]; then
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel rksu+susfs for $DEVICE#g" anykernel.sh
