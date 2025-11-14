@@ -1,4 +1,4 @@
-From 8ef73c9077f73ed83ce88fa061d7bce3a2436031 Mon Sep 17 00:00:00 2001
+From 0a5d5f8c8c9feefb795eb2f06d575a5769180487 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Wed, 11 Dec 2024 23:28:08 +0700
 Subject: [PATCH] KernelSU Patch
@@ -26,7 +26,7 @@ index 18ac7061caa7..8c73e43e7258 100644
 +
 +obj-$(CONFIG_KSU) += kernelsu/
 diff --git a/drivers/input/input.c b/drivers/input/input.c
-index 159dd87b93b0..452960c48d2a 100644
+index 70ffffea3e58..571f7c0e2c5b 100644
 --- a/drivers/input/input.c
 +++ b/drivers/input/input.c
 @@ -378,10 +378,19 @@ static int input_get_disposition(struct input_dev *dev,
@@ -83,10 +83,10 @@ index 553a3f3300ae..2dd0baa00c29 100644
  		return NULL;
  	return dentry->d_fsdata;
 diff --git a/fs/exec.c b/fs/exec.c
-index 885f0b005adc..1d33c52f0d07 100644
+index 9a70a2f943d8..6454a2367753 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -1889,12 +1889,26 @@ static int __do_execve_file(int fd, struct filename *filename,
+@@ -1895,12 +1895,26 @@ static int __do_execve_file(int fd, struct filename *filename,
  	return retval;
  }
  
@@ -115,23 +115,55 @@ index 885f0b005adc..1d33c52f0d07 100644
  
  int do_execve_file(struct file *file, void *__argv, void *__envp)
 diff --git a/fs/namespace.c b/fs/namespace.c
-index f9e06e27eceb..87a757b2e06c 100644
+index 3c961d780a4f..14e13f944cff 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
-@@ -1649,6 +1649,8 @@ static int can_umount(const struct path *path, int flags)
- {
- 	struct mount *mnt = real_mount(path->mnt);
- 
+@@ -1703,6 +1703,40 @@ static inline bool may_mandlock(void)
+  * We now support a flag for forced unmount like the other 'big iron'
+  * unixes. Our API is identical to OSF/1 to avoid making a mess of AMD
+  */
++static int can_umount(const struct path *path, int flags)
++{
++	struct mount *mnt = real_mount(path->mnt);
++
 +	if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))
 +		return -EINVAL;
- 	if (!may_mount())
- 		return -EPERM;
- 	if (path->dentry != path->mnt->mnt_root)
++	if (!may_mount())
++		return -EPERM;
++	if (path->dentry != path->mnt->mnt_root)
++		return -EINVAL;
++	if (!check_mnt(mnt))
++		return -EINVAL;
++	if (mnt->mnt.mnt_flags & MNT_LOCKED) /* Check optimistically */
++		return -EINVAL;
++	if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	return 0;
++}
++
++// caller is responsible for flags being sane
++int path_umount(struct path *path, int flags)
++{
++	struct mount *mnt = real_mount(path->mnt);
++	int ret;
++
++	ret = can_umount(path, flags);
++	if (!ret)
++		ret = do_umount(mnt, flags);
++
++	/* we mustn't call path_put() as that would clear mnt_expiry_mark */
++	dput(path->dentry);
++	mntput_no_expire(mnt);
++	return ret;
++}
+ 
+ int ksys_umount(char __user *name, int flags)
+ {
 diff --git a/fs/open.c b/fs/open.c
-index 76996f920ebf..68af05424840 100644
+index cf9817a938b4..b2749b0130b4 100644
 --- a/fs/open.c
 +++ b/fs/open.c
-@@ -339,6 +339,11 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
+@@ -349,6 +349,11 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
  	return ksys_fallocate(fd, mode, offset, len);
  }
  
@@ -143,8 +175,8 @@ index 76996f920ebf..68af05424840 100644
  /*
   * access() needs to use the real uid/gid, not the effective uid/gid.
   * We do this by temporarily clearing all FS-related capabilities and
-@@ -352,6 +357,9 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
- 	struct inode *inode;
+@@ -363,6 +368,9 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
+ 	struct vfsmount *mnt;
  	int res;
  	unsigned int lookup_flags = LOOKUP_FOLLOW;
 +   #ifdef CONFIG_KSU
@@ -202,5 +234,5 @@ index 376543199b5a..9efdcc82cc25 100644
  		       AT_EMPTY_PATH | KSTAT_QUERY_FLAGS)) != 0)
  		return -EINVAL;
 -- 
-2.39.5
+2.51.2
 
