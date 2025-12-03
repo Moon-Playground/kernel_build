@@ -5,7 +5,7 @@ source config.sh
 function parse_parameters() {
     while (($#)); do
         case $1 in
-            all | clang | kernel | anykernel | cleanup | write_config | release ) action=$1 ;;
+            help | clang | kernel | anykernel | cleanup | release ) action=$1 ;;
             *) exit 33 ;;
         esac
         shift
@@ -29,86 +29,28 @@ function do_clang(){
 	cd "$BASE_DIR" && rm "$CLANG_NAME"
 }
 
-function do_write_config() {
-	DEVICE=$(echo "$KERNEL_DEFCONFIG" | cut -d '-' -f1 | cut -d '_' -f1)
-
-	sed -i "s#export DEVICE#export DEVICE=\"$DEVICE\"#g" "$BASE_DIR"/config.sh
-	sed -i "s#export B_TYPE#export B_TYPE=\"$BUILD_TYPE\"#g" "$BASE_DIR"/config.sh
-	sed -i "s#export KERN_IMG#export KERN_IMG=\"$BASE_DIR/out/arch/$ARCH/boot/$KERNEL_IMG\"#g" "$BASE_DIR"/config.sh
-	sed -i "s#export DTB_PATH#export DTB_PATH=\"$BASE_DIR/out/arch/$ARCH/boot/dts/$KERNEL_DTB\"#g" "$BASE_DIR"/config.sh
-	sed -i "s#export KERN_DEFCONFIG#export KERN_DEFCONFIG=\"$KERNEL_DEFCONFIG\"#g" "$BASE_DIR"/config.sh
-	DTBO_NAME=$(grep '^CONFIG_BUILD_ARM64_DTB_OVERLAY_IMAGE_NAMES=' "$BASE_DIR"/arch/arm64/configs/"$KERNEL_DEFCONFIG"  | sed -n 's/^CONFIG_BUILD_ARM64_DTB_OVERLAY_IMAGE_NAMES="mediatek\/\([^"]*\)"/\1/p')
-	sed -i "s#export DTBO_PATH#export DTBO_PATH=\"$BASE_DIR/out/arch/$ARCH/boot/dts/$DTBO_NAME.dtbo\"#g" "$BASE_DIR"/config.sh
-}
-
-
-function write_ksu_config() {
-	echo """
-# KernelSU
-CONFIG_KSU=y
-CONFIG_KSU_MANUAL_HOOK=y""" >> "$BASE_DIR"/kernel/arch/"$ARCH"/configs/"$KERN_DEFCONFIG"
-}
-
-function write_susfs_config() {
-	echo """
-# KernelSU
-CONFIG_KSU=y
-CONFIG_KSU_MANUAL_HOOK=y
-
-# KernelSU - SusFsCONFIG_KSU_SUSFS=y
-CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_PATH=y
-CONFIG_KSU_SUSFS_SUS_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_KSTAT=y
-CONFIG_KSU_SUSFS_TRY_UMOUNT=y
-CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-CONFIG_KSU_SUSFS_ENABLE_LOG=y
-CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-""" >> "$BASE_DIR"/kernel/arch/"$ARCH"/configs/"$KERN_DEFCONFIG"
-}
-
 function do_kernel(){
 	mkdir -p "$BASE_DIR"/Logs
 
-	cd "$BASE_DIR"/kernel
 	if [[ $(uname -m) == "aarch64" ]]; then
-		rm tools/build/cpio
-		ln -sf $(which cpio) tools/build/cpio
-	fi
-	# 🕵️ Read LOCAL_VERSION line from defconfig
-	local_version_line=$(grep '^CONFIG_LOCALVERSION=' "$BASE_DIR"/kernel/arch/"$ARCH"/configs/"$KERN_DEFCONFIG")
-
-	# ✅ Check if it's set
-	if [[ -n "$local_version_line" ]]; then
-		# Extract the value (removing quotes)
-		current_local_version=$(echo "$local_version_line" | cut -d '=' -f2 | tr -d '"')
+		rm kernel/tools/build/cpio
+		ln -sf $(which cpio) kernel/tools/build/cpio
 	fi
 
-	git config --local user.name "$KBUILD_BUILD_USER"
-	git config --local user.email "$KBUILD_BUILD_USER@example.com"
+	git -C kernel config --local user.name "$KBUILD_BUILD_USER"
+	git -C kernel config --local user.email "$KBUILD_BUILD_USER@example.com"
 
 	if [[ "$B_TYPE" == "ksu" ]]; then
-		git am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
-		write_ksu_config
-		if [[ -n "$local_version_line" ]]; then
-			export LOCAL_VERSION="$current_local_version"-"#"
-		else
-			export LOCAL_VERSION="-$KERNEL_NAME-#"
-		fi
+		git -C kernel am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
+		python main.py append_config "ksu"
 	elif [[ "$B_TYPE" == "susfs" ]]; then
-		git am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
-		git am --3way "$BASE_DIR"/patches/0002-Susfs-Patch.patch || { echo "Patch application failed!"; exit 1; }
-		write_susfs_config
-		if [[ -n "$local_version_line" ]]; then
-			export LOCAL_VERSION="$current_local_version"-"ඞ"
-		else
-			export LOCAL_VERSION="-$KERNEL_NAME-ඞ"
-		fi
-	else
-		if [[ -z "$local_version_line" ]]; then
-			export LOCAL_VERSION="-$KERNEL_NAME"
-		fi
+		git -C kernel am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/0002-Susfs-Patch.patch || { echo "Patch application failed!"; exit 1; }
+		python main.py append_config "ksu"
+		python main.py append_config "susfs"
 	fi
+	python main.py update_localversion
+	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 -j"$CORES"  > >(tee ../Logs/stdout.log) 2> >(tee ../Logs/stderr.log) || { echo "Kernel build failed!"; exit 1; }
 }
@@ -164,20 +106,27 @@ Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/run
             --title "$TITLE" \
             --notes "$NOTES" \
             --target "$GITHUB_REF_NAME" \
-            --repo "$REPO"
+            --repo "$REPO" || gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Release creation/upload failed!"; exit 1; }
     fi
+	if [[ -n $UPLOAD_URL ]];then
+		python main.py upload "$file_name" "$UPLOAD_URL"
+	fi
     echo "Released successfully."
 }
 
-function do_all(){
-	do_clang
-	do_kernel
-	do_anykernel
-	do_cleanup
-	do_kernel
-	do_anykernel
-	do_release
+function do_help() {
+    echo "Usage: $0 <command>"
+    echo
+    echo "Available commands:"
+    echo "  clang      - Setup Clang toolchain"
+    echo "  kernel     - Compile  kernel sources"
+    echo "  anykernel  - Package kernel with AnyKernel installer"
+    echo "  cleanup    - Remove build artifacts and temporary files"
+    echo "  release    - Release package to github"
+    echo
+    echo "Example:"
+    echo "  $0 kernel   # Compile the kernel"
 }
 
 parse_parameters "$@"
-do_"${action:=all}"
+do_"${action:=help}"

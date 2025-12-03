@@ -1,0 +1,16 @@
+__pycache__/
+dist/
+kernel/
+out/
+
+*.bz2
+*.gz
+*.gz-dtb
+*.tar
+*.xz
+*.zip
+dtb
+dtbo.img
+Image
+zImage
+zImage-dtb
