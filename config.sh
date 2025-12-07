@@ -4,6 +4,7 @@ export ARCH="arm64"
 export KBUILD_BUILD_USER="wulan17"
 export KBUILD_BUILD_HOST="Github"
 export KERNEL_NAME="Mayuri"
+export SHIP_DTBO=0 # Set to 1 to ship dtbo.img, 0 to not ship
 
 ## Notes:
 # this script running in aarch64 workflows

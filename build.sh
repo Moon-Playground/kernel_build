@@ -64,7 +64,11 @@ function do_anykernel(){
 		echo "Compressing output..."
 		cp "$KERN_IMG" "$ZIP_DIR"/Image.gz
 		cp "$DTB_PATH" "$ZIP_DIR"/dtb
-		cp "$DTBO_PATH" "$ZIP_DIR"/dtbo.img
+		if [[ "$SHIP_DTBO" -eq 1 ]];then
+			cp "$DTBO_PATH" "$ZIP_DIR"/dtbo.img
+		else
+			echo "Skipping dtbo.img as SHIP_DTBO is set to 0"
+		fi
 		cd "$ZIP_DIR"
 		if [[ "$B_TYPE" == "susfs" ]]; then
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel rksu+susfs for $DEVICE#g" anykernel.sh
