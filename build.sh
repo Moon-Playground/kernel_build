@@ -42,13 +42,18 @@ function do_kernel(){
 
 	if [[ "$B_TYPE" == "ksu" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/hymofs.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
+		python main.py append_config "hymofs"
 	elif [[ "$B_TYPE" == "susfs" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
 		git -C kernel am --3way "$BASE_DIR"/patches/0002-Susfs-Patch.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/hymofs_with_susfs.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
 		python main.py append_config "susfs"
+		python main.py append_config "hymofs"
 	fi
+
 	python main.py update_localversion
 	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
