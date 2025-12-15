@@ -164,6 +164,9 @@ def append_config(config_name):
     elif config_name == 'susfs':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# KernelSU - SusFs\nCONFIG_KSU_SUSFS=y\nCONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y\nCONFIG_KSU_SUSFS_SUS_PATH=y\nCONFIG_KSU_SUSFS_SUS_MOUNT=y\nCONFIG_KSU_SUSFS_SUS_KSTAT=y\nCONFIG_KSU_SUSFS_TRY_UMOUNT=y\nCONFIG_KSU_SUSFS_SPOOF_UNAME=y\nCONFIG_KSU_SUSFS_ENABLE_LOG=y\nCONFIG_KSU_SUSFS_OPEN_REDIRECT=y\n')
+    elif config_name == 'hymofs':
+        with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
+            defconfig_file.write('\n# HymoFS\nCONFIG_HYMOFS=y\nCONFIG_BINFMT_MISC=y\n')
 
 def upload(file_name, url):
     load_config()
