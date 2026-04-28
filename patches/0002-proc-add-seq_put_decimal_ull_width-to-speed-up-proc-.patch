@@ -1,0 +1,215 @@
+From 9847bae95e9ca08581a36f19e55cb668dba1df6f Mon Sep 17 00:00:00 2001
+From: Andrei Vagin <avagin@openvz.org>
+Date: Tue, 10 Apr 2018 16:31:16 -0700
+Subject: [PATCH] proc: add seq_put_decimal_ull_width to speed up
+ /proc/pid/smaps
+
+seq_put_decimal_ull_w(m, str, val, width) prints a decimal number with a
+specified minimal field width.
+
+It is equivalent of seq_printf(m, "%s%*d", str, width, val), but it
+works much faster.
+
+== test_smaps.py
+  num = 0
+  with open("/proc/1/smaps") as f:
+          for x in xrange(10000):
+                  data = f.read()
+                  f.seek(0, 0)
+==
+
+== Before patch ==
+  $ time python test_smaps.py
+  real    0m4.593s
+  user    0m0.398s
+  sys     0m4.158s
+
+== After patch ==
+  $ time python test_smaps.py
+  real    0m3.828s
+  user    0m0.413s
+  sys     0m3.408s
+
+$ perf -g record python test_smaps.py
+== Before patch ==
+-   79.01%     3.36%  python   [kernel.kallsyms]    [k] show_smap.isra.33
+   - 75.65% show_smap.isra.33
+      + 48.85% seq_printf
+      + 15.75% __walk_page_range
+      + 9.70% show_map_vma.isra.23
+        0.61% seq_puts
+
+== After patch ==
+-   75.51%     4.62%  python   [kernel.kallsyms]    [k] show_smap.isra.33
+   - 70.88% show_smap.isra.33
+      + 24.82% seq_put_decimal_ull_w
+      + 19.78% __walk_page_range
+      + 12.74% seq_printf
+      + 11.08% show_map_vma.isra.23
+      + 1.68% seq_puts
+
+[akpm@linux-foundation.org: fix drivers/of/unittest.c build]
+Link: http://lkml.kernel.org/r/20180212074931.7227-1-avagin@openvz.org
+Signed-off-by: Andrei Vagin <avagin@openvz.org>
+Cc: Alexey Dobriyan <adobriyan@gmail.com>
+Cc: KAMEZAWA Hiroyuki <kamezawa.hiroyu@jp.fujitsu.com>
+Signed-off-by: Andrew Morton <akpm@linux-foundation.org>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+
+diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
+index 40e480bdfc44..71308da4c09f 100644
+--- a/fs/proc/task_mmu.c
++++ b/fs/proc/task_mmu.c
+@@ -478,17 +478,53 @@ struct mem_size_stats {
+ 	unsigned long shared_hugetlb;
+ 	unsigned long private_hugetlb;
+ 	u64 pss;
++	u64 pss_anon;
++	u64 pss_file;
++	u64 pss_shmem;
+ 	u64 pss_locked;
+ 	u64 swap_pss;
+ 	bool check_shmem_swap;
+ };
+ 
++static void smaps_page_accumulate(struct mem_size_stats *mss,
++		struct page *page, unsigned long size, unsigned long pss,
++		bool dirty, bool locked, bool private)
++{
++	mss->pss += pss;
++
++	if (PageAnon(page))
++		mss->pss_anon += pss;
++	else if (PageSwapBacked(page))
++		mss->pss_shmem += pss;
++	else
++		mss->pss_file += pss;
++
++	if (locked)
++		mss->pss_locked += pss;
++
++	if (dirty || PageDirty(page)) {
++		if (private)
++			mss->private_dirty += size;
++		else
++			mss->shared_dirty += size;
++	} else {
++		if (private)
++			mss->private_clean += size;
++		else
++			mss->shared_clean += size;
++	}
++}
++
+ static void smaps_account(struct mem_size_stats *mss, struct page *page,
+ 		bool compound, bool young, bool dirty, bool locked)
+ {
+ 	int i, nr = compound ? 1 << compound_order(page) : 1;
+ 	unsigned long size = nr * PAGE_SIZE;
+ 
++	/*
++	 * First accumulate quantities that depend only on |size| and the type
++	 * of the compound page.
++	 */
+ 	if (PageAnon(page)) {
+ 		mss->anonymous += size;
+ 		if (!PageSwapBacked(page) && !dirty && !PageDirty(page))
+@@ -501,42 +537,26 @@ static void smaps_account(struct mem_size_stats *mss, struct page *page,
+ 		mss->referenced += size;
+ 
+ 	/*
++	 * Then accumulate quantities that may depend on sharing, or that may
++	 * differ page-by-page.
++	 *
+ 	 * page_count(page) == 1 guarantees the page is mapped exactly once.
+ 	 * If any subpage of the compound page mapped with PTE it would elevate
+ 	 * page_count().
+ 	 */
+ 	if (page_count(page) == 1) {
+-		if (dirty || PageDirty(page))
+-			mss->private_dirty += size;
+-		else
+-			mss->private_clean += size;
+-		mss->pss += (u64)size << PSS_SHIFT;
+-		if (locked)
+-			mss->pss_locked += (u64)size << PSS_SHIFT;
++		smaps_page_accumulate(mss, page, size, size << PSS_SHIFT, dirty,
++			locked, true);
+ 		return;
+ 	}
+ 
+ 	for (i = 0; i < nr; i++, page++) {
+ 		int mapcount = page_mapcount(page);
+-		unsigned long pss = (PAGE_SIZE << PSS_SHIFT);
+-
+-		if (mapcount >= 2) {
+-			if (dirty || PageDirty(page))
+-				mss->shared_dirty += PAGE_SIZE;
+-			else
+-				mss->shared_clean += PAGE_SIZE;
+-			mss->pss += pss / mapcount;
+-			if (locked)
+-				mss->pss_locked += pss / mapcount;
+-		} else {
+-			if (dirty || PageDirty(page))
+-				mss->private_dirty += PAGE_SIZE;
+-			else
+-				mss->private_clean += PAGE_SIZE;
+-			mss->pss += pss;
+-			if (locked)
+-				mss->pss_locked += pss;
+-		}
++		unsigned long pss = PAGE_SIZE << PSS_SHIFT;
++		if (mapcount >= 2)
++			pss /= mapcount;
++		smaps_page_accumulate(mss, page, PAGE_SIZE, pss, dirty, locked,
++				      mapcount < 2);
+ 	}
+ }
+ 
+@@ -816,10 +836,23 @@ static void smap_gather_stats(struct vm_area_struct *vma,
+ 		seq_put_decimal_ull_width(m, str, (val) >> 10, 8)
+ 
+ /* Show the contents common for smaps and smaps_rollup */
+-static void __show_smap(struct seq_file *m, const struct mem_size_stats *mss)
++static void __show_smap(struct seq_file *m, const struct mem_size_stats *mss,
++	bool rollup_mode)
+ {
+ 	SEQ_PUT_DEC("Rss:            ", mss->resident);
+ 	SEQ_PUT_DEC(" kB\nPss:            ", mss->pss >> PSS_SHIFT);
++	if (rollup_mode) {
++		/*
++		 * These are meaningful only for smaps_rollup, otherwise two of
++		 * them are zero, and the other one is the same as Pss.
++		 */
++		SEQ_PUT_DEC(" kB\nPss_Anon:       ",
++			mss->pss_anon >> PSS_SHIFT);
++		SEQ_PUT_DEC(" kB\nPss_File:       ",
++			mss->pss_file >> PSS_SHIFT);
++		SEQ_PUT_DEC(" kB\nPss_Shmem:      ",
++			mss->pss_shmem >> PSS_SHIFT);
++	}
+ 	SEQ_PUT_DEC(" kB\nShared_Clean:   ", mss->shared_clean);
+ 	SEQ_PUT_DEC(" kB\nShared_Dirty:   ", mss->shared_dirty);
+ 	SEQ_PUT_DEC(" kB\nPrivate_Clean:  ", mss->private_clean);
+@@ -861,7 +894,7 @@ static int show_smap(struct seq_file *m, void *v)
+ 	SEQ_PUT_DEC(" kB\nMMUPageSize:    ", vma_mmu_pagesize(vma));
+ 	seq_puts(m, " kB\n");
+ 
+-	__show_smap(m, &mss);
++	__show_smap(m, &mss, false);
+ 
+ 	seq_printf(m, "THPeligible:    %d\n", transparent_hugepage_enabled(vma));
+ 
+@@ -965,7 +998,7 @@ static int show_smaps_rollup(struct seq_file *m, void *v)
+ 	seq_pad(m, ' ');
+ 	seq_puts(m, "[rollup]\n");
+ 
+-	__show_smap(m, &mss);
++	__show_smap(m, &mss, true);
+ 
+ 	release_task_mempolicy(priv);
+ 	mmap_read_unlock(mm);
+-- 
+2.53.0
+

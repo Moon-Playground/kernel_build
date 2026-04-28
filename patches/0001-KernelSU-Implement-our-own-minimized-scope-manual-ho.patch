@@ -1,4 +1,4 @@
-From be2443301a053f00d484fa20a99e1d99e6054925 Mon Sep 17 00:00:00 2001
+From cf3bc7f72104088ee0809f0acb8a760e8987fee3 Mon Sep 17 00:00:00 2001
 From: rsuntk <rissu.ntk@gmail.com>
 Date: Thu, 2 Apr 2026 18:22:48 +0700
 Subject: [PATCH] KernelSU: Implement our own minimized-scope manual hook
@@ -75,7 +75,7 @@ index eef84ebcac53..e18fdd6775d9 100644
  }
  
 diff --git a/fs/open.c b/fs/open.c
-index 4d6b05f62960..ddf378b53cf6 100644
+index cb70b65b8b71..053e34239753 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -451,8 +451,15 @@ long do_faccessat(int dfd, const char __user *filename, int mode)

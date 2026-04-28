@@ -41,11 +41,10 @@ function do_kernel(){
 	git -C kernel config --local user.email "$KBUILD_BUILD_USER@example.com"
 
 	if [[ "$B_TYPE" == "ksu" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/0001-*.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
 	elif [[ "$B_TYPE" == "susfs" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-KernelSU-Patch.patch || { echo "Patch application failed!"; exit 1; }
-		git -C kernel am --3way "$BASE_DIR"/patches/0002-Susfs-Patch.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/*.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
 		python main.py append_config "susfs"
 	fi
