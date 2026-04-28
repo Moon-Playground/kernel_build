@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
-        build_type: ["normal", "ksu"]
+        build_type: ["normal", "ksu", "susfs"]
     container:
       image: wulan17/debian-aarch64:latest
     steps:
