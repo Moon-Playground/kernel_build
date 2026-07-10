@@ -9,11 +9,11 @@ on:
       kernel_repo:
         description: 'Kernel repository to build'
         required: true
-        default: 'Mayuri-Chan/android_kernel_xiaomi_gale'
+        default: 'FreshROMs/android_kernel_samsung_exynos9610_mint'
       kernel_branch:
         description: 'Kernel branch to build'
         required: true
-        default: 'stable'
+        default: 'android-12.0'
       kernelsu_repo:
         description: 'Kernelsu repository to build'
         required: true
@@ -21,7 +21,7 @@ on:
       kernel_defconfig:
         description: 'defconfig to build the kernel'
         required: true
-        default: 'gale_defconfig'
+        default: 'exynos9610-a50_default_defconfig'
       kernelsu_branch:
         description: 'Kernelsu branch to build'
         required: true
@@ -37,11 +37,11 @@ on:
       kernel_img:
         description: 'Kernel image name'
         required: false
-        default: 'Image.gz'
+        default: 'Image'
       kernel_dtb:
         description: 'Kernel dtb name'
         required: false
-        default: 'mediatek/mt6768.dtb'
+        default: ''
 
 
 jobs:
