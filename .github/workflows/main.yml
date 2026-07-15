@@ -14,26 +14,10 @@ on:
         description: 'Kernel branch to build'
         required: true
         default: 'stable'
-      kernelsu_repo:
-        description: 'Kernelsu repository to build'
-        required: true
-        default: 'rsuntk/KernelSU'
       kernel_defconfig:
         description: 'defconfig to build the kernel'
         required: true
         default: 'gale_defconfig'
-      kernelsu_branch:
-        description: 'Kernelsu branch to build'
-        required: true
-        default: 'main'
-      kernelsu_susfs_repo:
-        description: 'SUSFS repository to build'
-        required: true
-        default: 'rsuntk/KernelSU'
-      kernelsu_susfs_branch:
-        description: 'SUSFS branch to build'
-        required: true
-        default: 'susfs-rksu-master'
       kernel_img:
         description: 'Kernel image name'
         required: false
@@ -47,19 +31,19 @@ on:
 jobs:
   build_kernel:
     runs-on: ubuntu-24.04-arm
+    container:
+      image: fedora:44
     strategy:
       matrix:
         build_type: ["normal", "ksu", "susfs"]
-    container:
-      image: wulan17/debian-aarch64:latest
     steps:
       - name: Checkout script
         uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          apt update && apt upgrade -y
-          apt install -y ccache wget bc build-essential make autoconf automake git bison pahole flex libssl-dev zip jq cpio aria2 gh python3 python-is-python3 python3-requests
+          dnf update -y
+          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests
 
       - name: Authenticate GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
@@ -73,15 +57,11 @@ jobs:
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           ssh-strict: "false"
 
-      - name: Clone kernelsu
+      - name: Setup KernelSU
         if: ${{ matrix.build_type == 'ksu' || matrix.build_type == 'susfs' }}
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ matrix.build_type == 'ksu' && github.event.inputs.kernelsu_repo || github.event.inputs.kernelsu_susfs_repo }}
-          path: kernel/KernelSU
-          ref: ${{ matrix.build_type == 'ksu' && github.event.inputs.kernelsu_branch || github.event.inputs.kernelsu_susfs_branch }}
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-strict: "false"
+        run: |
+          cd kernel
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
 
       - name: Write Config
         run: python main.py write_config
