@@ -29,7 +29,6 @@ def write_config():
     ARCH = os.environ.get('ARCH', None)
     KERNEL_IMG = os.environ.get('KERNEL_IMG', None)
     KERNEL_DTB = os.environ.get('KERNEL_DTB', None)
-    BUILD_TYPE = os.environ.get('BUILD_TYPE', None)
     KERNEL_IMG = f"{BASE_DIR}/out/arch/{ARCH}/boot/{KERNEL_IMG}" if ARCH and KERNEL_IMG else None
     KERNEL_DEFCONFIG = os.environ.get('KERNEL_DEFCONFIG', None)
     DTB_PATH = f"{BASE_DIR}/out/arch/{ARCH}/boot/dts/{KERNEL_DTB}" if ARCH and KERNEL_DTB else None
@@ -58,13 +57,11 @@ def write_config():
     print(f"BASE_DIR={BASE_DIR}")
     print(f"KERNEL_IMG={KERNEL_IMG}")
     print(f"DEVICE={DEVICE}")
-    print(f"BUILD_TYPE={BUILD_TYPE}")
     print(f"KERNEL_DEFCONFIG={KERNEL_DEFCONFIG}")
     print(f"DTB_PATH={DTB_PATH}")
     print(f"DTBO_PATH={DTBO_PATH}")
 
-    NEW_CONFIG = f"""export B_TYPE="{BUILD_TYPE}"
-export DEVICE="{DEVICE}"
+    NEW_CONFIG = f"""export DEVICE="{DEVICE}"
 export KERN_IMG="{KERNEL_IMG}"
 export DTB_PATH="{DTB_PATH}"
 export DTBO_PATH="{DTBO_PATH}"
@@ -95,7 +92,6 @@ def update_localversion():
     load_config()
     KERN_DEFCONFIG = os.environ.get('KERN_DEFCONFIG', None)
     DEFCONFIG_PATH = os.path.join(os.getcwd(), "kernel", "arch", os.environ.get('ARCH', ''), "configs", KERN_DEFCONFIG)
-    build_type = os.environ.get('B_TYPE', 'normal')
     localversion_found = False
     # Rewrite the file with updated localversion
     with open(DEFCONFIG_PATH, "r", encoding="utf-8") as defconfig_file:
@@ -112,12 +108,7 @@ def update_localversion():
                 )
             ):
                 old_localversion = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
-                if build_type == 'ksu':
-                    new_localversion = old_localversion + '-#'
-                elif build_type == 'susfs':
-                    new_localversion = old_localversion + '-ඞ'
-                else:
-                    new_localversion = old_localversion
+                new_localversion = old_localversion + '-ඞ'
                 defconfig_file.write(f'CONFIG_LOCALVERSION="{new_localversion}"\n')
                 localversion_found = True
             elif (
@@ -129,41 +120,23 @@ def update_localversion():
                     or line.strip().startswith("# CONFIG_LOCALVERSION_EXTEND")
                 )
             ):
-                if build_type == 'ksu':
-                    new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
-                elif build_type == 'susfs':
-                    new_localversion = os.environ.get('KERNEL_NAME') + '-ඞ' if os.environ.get('KERNEL_NAME') else 'ඞ'
-                else:
-                    new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
-                if new_localversion:
-                    defconfig_file.write(f'CONFIG_LOCALVERSION="-{new_localversion}"\n')
-                else:
-                    defconfig_file.write(line)
+                new_localversion = os.environ.get('KERNEL_NAME') + '-ඞ' if os.environ.get('KERNEL_NAME') else 'ඞ'
+                defconfig_file.write(f'CONFIG_LOCALVERSION="-{new_localversion}"\n')
                 localversion_found = True
             else:
                 defconfig_file.write(line)
     if not localversion_found:
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
-            if build_type == 'ksu':
-                new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
-            elif build_type == 'susfs':
-                new_localversion = os.environ.get('KERNEL_NAME') + '-ඞ' if os.environ.get('KERNEL_NAME') else 'ඞ'
-            else:
-                new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
-            if new_localversion:
-                defconfig_file.write(f'\nCONFIG_LOCALVERSION="-{new_localversion}"\n')
+            new_localversion = os.environ.get('KERNEL_NAME') + '-ඞ' if os.environ.get('KERNEL_NAME') else 'ඞ'
+            defconfig_file.write(f'\nCONFIG_LOCALVERSION="-{new_localversion}"\n')
     print(f"Localversion updated to -{new_localversion} in {DEFCONFIG_PATH}")
 
-def append_config(config_name):
+def append_config():
     load_config()
     KERN_DEFCONFIG = os.environ.get('KERN_DEFCONFIG', None)
     DEFCONFIG_PATH = os.path.join(os.getcwd(), "kernel", "arch", os.environ.get('ARCH', ''), "configs", KERN_DEFCONFIG)
-    if config_name == 'ksu':
-        with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
-            defconfig_file.write('\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_MANUAL_HOOK=y\n')
-    elif config_name == 'susfs':
-        with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
-            defconfig_file.write('\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_SUSFS=y\n')
+    with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
+        defconfig_file.write('\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_SUSFS=y\n\n# ZeroMount\nCONFIG_ZEROMOUNT=y')
 
 def upload(file_name, url):
     load_config()
@@ -202,11 +175,7 @@ def main():
     elif cmd == "update_localversion":
         update_localversion()
     elif cmd == "append_config":
-        if len(sys.argv) < 3:
-            print("Please provide a config name to append.")
-            return
-        config_name = sys.argv[2]
-        append_config(config_name)
+        append_config()
     elif cmd == "upload":
         if len(sys.argv) < 4:
             print("Please provide a file name and upload URL.")

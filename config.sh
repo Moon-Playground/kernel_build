@@ -23,12 +23,4 @@ export PATH="$BASE_DIR/clang/bin:/usr/lib/ccache:$PATH"
 # Reserved
 # END OF DO NOT EDIT
 
-if [[ -n "$B_TYPE" ]]; then
-    if [[ "$B_TYPE" == "susfs" ]]; then
-        export ZIP_NAME="$GITHUB_RUN_ID-$KERNEL_NAME-kernel-$DEVICE-resukisu-susfs-"$(env TZ='Asia/Jakarta' date +%Y%m%d)
-    elif [[ "$B_TYPE" == "ksu" ]]; then
-        export ZIP_NAME="$GITHUB_RUN_ID-$KERNEL_NAME-kernel-$DEVICE-resukisu-"$(env TZ='Asia/Jakarta' date +%Y%m%d)
-    else
-        export ZIP_NAME="$GITHUB_RUN_ID-$KERNEL_NAME-kernel-$DEVICE-"$(env TZ='Asia/Jakarta' date +%Y%m%d)
-    fi
-fi
+export ZIP_NAME="$GITHUB_RUN_ID-$KERNEL_NAME-kernel-$DEVICE-resukisu-susfs-"$(env TZ='Asia/Jakarta' date +%Y%m%d)

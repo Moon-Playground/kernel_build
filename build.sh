@@ -40,13 +40,9 @@ function do_kernel(){
 	git -C kernel config --local user.name "$KBUILD_BUILD_USER"
 	git -C kernel config --local user.email "$KBUILD_BUILD_USER@example.com"
 
-	if [[ "$B_TYPE" == "ksu" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
-		python main.py append_config "ksu"
-	elif [[ "$B_TYPE" == "susfs" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-susfs.patch || { echo "Patch application failed!"; exit 1; }
-		python main.py append_config "susfs"
-	fi
+	git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-susfs.patch || { echo "Patch application failed!"; exit 1; }
+	git -C kernel am --3way "$BASE_DIR"/patches/0002-gale-Import-ZeroMount-Driver.patch || { echo "Patch application failed!"; exit 1; }
+	python main.py append_config
 	python main.py update_localversion
 	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
@@ -68,13 +64,7 @@ function do_anykernel(){
 			echo "Skipping dtbo.img as SHIP_DTBO is set to 0"
 		fi
 		cd "$ZIP_DIR"
-		if [[ "$B_TYPE" == "susfs" ]]; then
-			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU+susfs for $DEVICE#g" anykernel.sh
-		elif [[ "$B_TYPE" == "ksu" ]]; then
-			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU for $DEVICE#g" anykernel.sh
-		else
-			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel for $DEVICE#g" anykernel.sh
-		fi
+		sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU+susfs for $DEVICE#g" anykernel.sh
 		zip -r "$ZIP_NAME".zip .
 		mkdir -p "$BASE_DIR"/dist
 		mv "$ZIP_NAME".zip "$BASE_DIR"/dist
@@ -91,7 +81,7 @@ function do_release() {
     ASSET="$BASE_DIR/dist/$file_name"
     REPO="$GITHUB_REPOSITORY"
     DEVICE_TITLE="${DEVICE^}"
-    TITLE="$DEVICE_TITLE ($(env TZ='UTC' date +%Y%m%d)) ($GITHUB_RUN_ID)"
+    TITLE="$DEVICE_TITLE (ReSukiSU+susfs) ($(env TZ='UTC' date +%Y%m%d)) ($GITHUB_RUN_ID)"
     NOTES="""$KERNEL_NAME Kernel
 Device: $DEVICE_TITLE
 Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)

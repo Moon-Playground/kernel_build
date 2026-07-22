@@ -33,9 +33,6 @@ jobs:
     runs-on: ubuntu-24.04-arm
     container:
       image: fedora:44
-    strategy:
-      matrix:
-        build_type: ["normal", "ksu", "susfs"]
     steps:
       - name: Checkout script
         uses: actions/checkout@v4
@@ -59,7 +56,6 @@ jobs:
           submodules: "recursive"
 
       - name: Setup KernelSU
-        if: ${{ matrix.build_type == 'ksu' || matrix.build_type == 'susfs' }}
         run: |
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
@@ -68,7 +64,6 @@ jobs:
         run: python main.py write_config
         env:
           KERNEL_DEFCONFIG: ${{ github.event.inputs.kernel_defconfig }}
-          BUILD_TYPE: ${{ matrix.build_type }}
           KERNEL_IMG: ${{ github.event.inputs.kernel_img }}
           KERNEL_DTB: ${{ github.event.inputs.kernel_dtb }}
 
@@ -85,7 +80,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.build_type }}-build-logs
+          name: build-logs
           path: Logs/
 
       - name: Release kernel
