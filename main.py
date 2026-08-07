@@ -164,6 +164,11 @@ def append_config(config_name):
     elif config_name == 'susfs':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_SUSFS=y\n')
+    elif config_name == 'droidspaces':
+        with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
+            with open(os.path.join(os.getcwd(), "droidspaces_config"), 'r', encoding='utf-8') as f:
+                content = f.read()
+                defconfig_file.write('\n' + content)
 
 def upload(file_name, url):
     load_config()

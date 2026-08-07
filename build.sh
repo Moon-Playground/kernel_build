@@ -49,6 +49,7 @@ function do_kernel(){
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-NoMount-Integration-susfs.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "susfs"
 	fi
+	python main.py append_config "droidspaces"
 	python main.py update_localversion
 	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
