@@ -42,13 +42,16 @@ function do_kernel(){
 
 	if [[ "$B_TYPE" == "ksu" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-NoMount-Integration.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
+		cd kernel
+		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	elif [[ "$B_TYPE" == "susfs" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-susfs.patch || { echo "Patch application failed!"; exit 1; }
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-NoMount-Integration-susfs.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "susfs"
+		cd kernel
+		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	fi
+	cd "$BASE_DIR"
 	python main.py append_config "droidspaces"
 	python main.py update_localversion
 	cd "$BASE_DIR"/kernel
