@@ -1,4 +1,4 @@
-From 3507832aededd9f79bfc029778e6d814ab00415b Mon Sep 17 00:00:00 2001
+From ba38a6ba48b77a0d06c9a67983d143cc672a23d1 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Wed, 15 Jul 2026 19:22:04 +0700
 Subject: [PATCH] gale: ReSukiSU+susfs
@@ -555,7 +555,7 @@ index 4c225cf97ae5..52834a069888 100644
  	do_delayed_call(&done);
  	return res;
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 3c961d780a4f..c35273a7f510 100644
+index 3c961d780a4f..27152ca6580e 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -26,10 +26,21 @@
@@ -984,7 +984,7 @@ index 74aeabbf0ea4..48d98a5ca9ce 100644
  			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
  			   inotify_mark_user_mask(mark));
 diff --git a/fs/open.c b/fs/open.c
-index 4d6b05f62960..a80715605ff7 100644
+index 4d6b05f62960..52df55a77adf 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -31,6 +31,9 @@
@@ -997,20 +997,27 @@ index 4d6b05f62960..a80715605ff7 100644
  
  #include "internal.h"
  #include <trace/hooks/syscall_check.h>
-@@ -451,8 +454,17 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
+@@ -451,8 +454,24 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
  	return res;
  }
  
 +#ifdef CONFIG_KSU_SUSFS
-+__attribute__((hot)) 
-+extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user,
++struct filename;
++__attribute__((hot))
++extern int ksu_handle_faccessat(int *dfd, struct filename **filename,
 +				int *mode, int *flags);
 +#endif
 +
  SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
  {
 +#ifdef CONFIG_KSU_SUSFS
-+	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
++	{
++		struct filename *tmp = getname(filename);
++		if (!IS_ERR(tmp)) {
++			ksu_handle_faccessat(&dfd, &tmp, &mode, NULL);
++			putname(tmp);
++		}
++	}
 +#endif
  	return do_faccessat(dfd, filename, mode);
  }
@@ -1987,7 +1994,7 @@ index 3c5ce8a0ddc9..76b25d1c7002 100644
  }
  #endif
 diff --git a/fs/stat.c b/fs/stat.c
-index 376543199b5a..4fffdb7a343d 100644
+index 376543199b5a..d363677c8637 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -21,6 +21,10 @@
@@ -2054,14 +2061,15 @@ index 376543199b5a..4fffdb7a343d 100644
  		fdput(f);
  	}
  	return error;
-@@ -352,6 +379,17 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
+@@ -352,6 +379,18 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
  
  	return cp_new_stat(&stat, statbuf);
  }
 + 
 +#ifdef CONFIG_KSU_SUSFS
-+__attribute__((hot)) 
-+extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
++struct filename;
++__attribute__((hot))
++extern int ksu_handle_stat(int *dfd, struct filename **filename,
 +				int *flags);
 +
 +extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
@@ -2072,22 +2080,34 @@ index 376543199b5a..4fffdb7a343d 100644
  
  #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
  SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
-@@ -360,6 +398,9 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+@@ -360,6 +399,15 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
  	struct kstat stat;
  	int error;
  
 +#ifdef CONFIG_KSU_SUSFS
-+	ksu_handle_stat(&dfd, &filename, &flag);
++	{
++		struct filename *tmp = getname(filename);
++		if (!IS_ERR(tmp)) {
++			ksu_handle_stat(&dfd, &tmp, &flag);
++			putname(tmp);
++		}
++	}
 +#endif
  	error = vfs_fstatat(dfd, filename, &stat, flag);
  	if (error)
  		return error;
-@@ -510,6 +551,9 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
+@@ -510,6 +558,15 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
  	struct kstat stat;
  	int error;
  
 +#ifdef CONFIG_KSU_SUSFS
-+	ksu_handle_stat(&dfd, &filename, &flag);
++	{
++		struct filename *tmp = getname(filename);
++		if (!IS_ERR(tmp)) {
++			ksu_handle_stat(&dfd, &tmp, &flag);
++			putname(tmp);
++		}
++	}
 +#endif
  	error = vfs_fstatat(dfd, filename, &stat, flag);
  	if (error)
