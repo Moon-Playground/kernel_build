@@ -169,6 +169,9 @@ def append_config(config_name):
             with open(os.path.join(os.getcwd(), "droidspaces_config"), 'r', encoding='utf-8') as f:
                 content = f.read()
                 defconfig_file.write('\n' + content)
+    elif config_name == 'basebandguard':
+        with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
+            defconfig_file.write('\n# Baseband-Guard\nCONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"\nCONFIG_BBG=y')
 
 def upload(file_name, url):
     load_config()
