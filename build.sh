@@ -45,11 +45,6 @@ function do_kernel(){
 		python main.py append_config "ksu"
 		cd kernel
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
-	elif [[ "$B_TYPE" == "susfs" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-susfs.patch || { echo "Patch application failed!"; exit 1; }
-		python main.py append_config "susfs"
-		cd kernel
-		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	fi
 	cd "$BASE_DIR"/kernel
 	wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
@@ -77,9 +72,7 @@ function do_anykernel(){
 			echo "Skipping dtbo.img as SHIP_DTBO is set to 0"
 		fi
 		cd "$ZIP_DIR"
-		if [[ "$B_TYPE" == "susfs" ]]; then
-			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU+susfs for $DEVICE#g" anykernel.sh
-		elif [[ "$B_TYPE" == "ksu" ]]; then
+		if [[ "$B_TYPE" == "ksu" ]]; then
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU for $DEVICE#g" anykernel.sh
 		else
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel for $DEVICE#g" anykernel.sh
