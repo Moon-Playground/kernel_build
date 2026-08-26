@@ -1,4 +1,4 @@
-From 132638695bfc3aaf12f974727433334008f9b33d Mon Sep 17 00:00:00 2001
+From 451a304b20c89c921a70c7c8b9c213137a8a8219 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Wed, 26 Aug 2026 17:58:23 +0700
 Subject: [PATCH] gale: ReSukiSU+susfs
@@ -564,7 +564,7 @@ index 4c225cf97ae5..52834a069888 100644
  	do_delayed_call(&done);
  	return res;
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 3c961d780a4f..93794dc2baaa 100644
+index 3c961d780a4f..9cd7a283f765 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -27,10 +27,21 @@
@@ -992,7 +992,7 @@ index 74aeabbf0ea4..48d98a5ca9ce 100644
  			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
  			   inotify_mark_user_mask(mark));
 diff --git a/fs/open.c b/fs/open.c
-index 4d6b05f62960..7484c49e0d06 100644
+index 4d6b05f62960..203ba9ba3405 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -31,6 +31,9 @@
@@ -1005,20 +1005,21 @@ index 4d6b05f62960..7484c49e0d06 100644
  
  #include "internal.h"
  #include <trace/hooks/syscall_check.h>
-@@ -354,6 +357,12 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
+@@ -354,6 +357,13 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
   * We do this by temporarily clearing all FS-related capabilities and
   * switching the fsuid/fsgid around to the real ones.
   */
 +#ifdef CONFIG_KSU_SUSFS
++struct filename;
 +extern struct static_key_true ksu_su_compat_enabled;
 +extern bool __ksu_is_allow_uid_for_current(uid_t uid);
-+extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
++extern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,
 +			int *flags);
 +#endif
  long do_faccessat(int dfd, const char __user *filename, int mode)
  {
  	const struct cred *old_cred;
-@@ -364,6 +373,16 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
+@@ -364,6 +374,22 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
  	int res;
  	unsigned int lookup_flags = LOOKUP_FOLLOW;
  
@@ -1027,7 +1028,13 @@ index 4d6b05f62960..7484c49e0d06 100644
 +		goto orig_flow;
 +	if (static_branch_likely(&ksu_su_compat_enabled))
 +		if (unlikely(__ksu_is_allow_uid_for_current(current_uid().val))) {
-+			ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
++			{
++				struct filename *tmp = getname(filename);
++				if (!IS_ERR(tmp)) {
++					ksu_handle_faccessat(&dfd, &tmp, &mode, NULL);
++					putname(tmp);
++				}
++			}
 +	}
 +
 +orig_flow:
@@ -2005,7 +2012,7 @@ index 3c5ce8a0ddc9..76b25d1c7002 100644
  }
  #endif
 diff --git a/fs/stat.c b/fs/stat.c
-index 376543199b5a..b4cec2509dbe 100644
+index 376543199b5a..e4341df567b5 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -20,6 +20,13 @@
@@ -2075,20 +2082,21 @@ index 376543199b5a..b4cec2509dbe 100644
  		fdput(f);
  	}
  	return error;
-@@ -163,6 +193,12 @@ EXPORT_SYMBOL(vfs_statx_fd);
+@@ -163,6 +193,13 @@ EXPORT_SYMBOL(vfs_statx_fd);
   *
   * 0 will be returned on success, and a -ve error code if unsuccessful.
   */
 +#ifdef CONFIG_KSU_SUSFS
++struct filename;
 +extern struct static_key_true ksu_su_compat_enabled;
 +extern bool __ksu_is_allow_uid_for_current(uid_t uid);
-+extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
++extern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);
 +#endif
 +
  int vfs_statx(int dfd, const char __user *filename, int flags,
  	      struct kstat *stat, u32 request_mask)
  {
-@@ -170,6 +206,16 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
+@@ -170,6 +207,22 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
  	int error = -EINVAL;
  	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;
  
@@ -2097,7 +2105,13 @@ index 376543199b5a..b4cec2509dbe 100644
 +		goto orig_flow;
 +	if (static_branch_likely(&ksu_su_compat_enabled)) {
 +		if (unlikely(__ksu_is_allow_uid_for_current(current_uid().val)))
-+			ksu_handle_stat(&dfd, &filename, &flags);
++			{
++				struct filename *tmp = getname(filename);
++				if (!IS_ERR(tmp)) {
++					ksu_handle_stat(&dfd, &tmp, &flags);
++					putname(tmp);
++				}
++			}
 +	}
 +orig_flow:
 +#endif
