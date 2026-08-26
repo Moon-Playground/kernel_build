@@ -172,6 +172,17 @@ def append_config(config_name):
     elif config_name == 'basebandguard':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# Baseband-Guard\nCONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"\nCONFIG_BBG=y')
+    elif config_name == "full_lto":
+        with open(DEFCONFIG_PATH, "r", encoding="utf-8") as defconfig_file:
+            lines = defconfig_file.readlines()
+        with open(DEFCONFIG_PATH, "w", encoding="utf-8") as defconfig_file:
+            for line in lines:
+                if line.strip().startswith("# CONFIG_LTO_CLANG_FULL"):
+                    defconfig_file.write('CONFIG_LTO_CLANG_FULL=y')
+                elif line.strip().startswith("CONFIG_THINLTO"):
+                    continue
+                else:
+                    defconfig_file.write(line)
 
 def upload(file_name, url):
     load_config()

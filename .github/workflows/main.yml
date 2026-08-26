@@ -26,7 +26,10 @@ on:
         description: 'Kernel dtb name'
         required: false
         default: 'mediatek/mt6768.dtb'
-
+      full_lto:
+        description: 'Enable full LTO'
+        required: false
+        default: false
 
 jobs:
   build_kernel:
@@ -77,6 +80,8 @@ jobs:
 
       - name: Build Kernel
         run: bash build.sh kernel
+        env:
+          FULL_LTO: ${{ github.event.inputs.full_lto }}
 
       - name: Compress AnyKernel
         run: bash build.sh anykernel

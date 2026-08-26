@@ -56,6 +56,9 @@ function do_kernel(){
 	cd "$BASE_DIR"
 	python main.py append_config "basebandguard"
 	python main.py append_config "droidspaces"
+	if [[ "$FULL_LTO" == "true" ]]; then
+		python main.py append_config "full_lto"
+	fi
 	python main.py update_localversion
 	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
