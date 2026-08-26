@@ -51,7 +51,9 @@ function do_kernel(){
 		cd kernel
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	fi
+	wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
 	cd "$BASE_DIR"
+	python main.py append_config "basebandguard"
 	python main.py append_config "droidspaces"
 	python main.py update_localversion
 	cd "$BASE_DIR"/kernel
