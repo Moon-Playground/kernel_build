@@ -172,6 +172,20 @@ def append_config(config_name):
     elif config_name == 'basebandguard':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# Baseband-Guard\nCONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"\nCONFIG_BBG=y')
+    elif config_name == "full_lto":
+        with open(DEFCONFIG_PATH, "r", encoding="utf-8") as defconfig_file:
+            lines = defconfig_file.readlines()
+        with open(DEFCONFIG_PATH, "w", encoding="utf-8") as defconfig_file:
+            for line in lines:
+                if line.strip() == "CONFIG_THINLTO=y":
+                    # Disable ThinLTO so the kernel falls back to full LTO.
+                    # This kernel uses the older style where CONFIG_THINLTO=y
+                    # opts into ThinLTO; there is no separate CONFIG_LTO_CLANG_FULL.
+                    defconfig_file.write("# CONFIG_THINLTO is not set\n")
+                elif line.strip() == "CONFIG_LLVM_POLLY=y":
+                    defconfig_file.write("# CONFIG_LLVM_POLLY is not set\n")
+                else:
+                    defconfig_file.write(line)
 
 def upload(file_name, url):
     load_config()
