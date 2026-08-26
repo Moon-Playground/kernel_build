@@ -5,7 +5,7 @@ source config.sh
 function parse_parameters() {
     while (($#)); do
         case $1 in
-            help | clang | kernel | anykernel | cleanup | release ) action=$1 ;;
+            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | cleanup | release ) action=$1 ;;
             *) exit 33 ;;
         esac
         shift
@@ -29,17 +29,41 @@ function do_clang(){
 	cd "$BASE_DIR" && rm "$CLANG_NAME"
 }
 
-function do_kernel(){
-	mkdir -p "$BASE_DIR"/Logs
+function do_swap(){
+    # 1. Deactivate existing swap and clean up old files safely
+    swapoff -a 2>/dev/null || true
+    rm -f /mnt/swapfile
 
+    # 2. Allocate 16GB zeroed file
+    fallocate -l 16G /mnt/swapfile
+    chmod 0600 /mnt/swapfile
+
+    # 3. Attach to a loop device to bypass underlying filesystem restrictions
+    LOOP_DEV=$(losetup -f --show /mnt/swapfile)
+
+    # 4. Format and activate swap via the loop device
+    mkswap "$LOOP_DEV"
+    swapon "$LOOP_DEV"
+
+    # 5. Verify active swap
+    free -h
+}
+
+function do_bbg(){
+	cd "$BASE_DIR"/kernel
+	wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+	cd "$BASE_DIR"
+	python main.py append_config "basebandguard"
+}
+
+function do_patches(){
+	git -C kernel config --local user.name "$KBUILD_BUILD_USER"
+	git -C kernel config --local user.email "$KBUILD_BUILD_USER@github.com"
+	cd "$BASE_DIR"
 	if [[ $(uname -m) == "aarch64" ]]; then
 		rm kernel/tools/build/cpio
 		ln -sf $(which cpio) kernel/tools/build/cpio
 	fi
-
-	git -C kernel config --local user.name "$KBUILD_BUILD_USER"
-	git -C kernel config --local user.email "$KBUILD_BUILD_USER@example.com"
-
 	if [[ "$B_TYPE" == "ksu" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
@@ -51,15 +75,21 @@ function do_kernel(){
 		cd kernel
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	fi
-	cd "$BASE_DIR"/kernel
-	wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+}
+
+function do_droidspaces(){
 	cd "$BASE_DIR"
-	python main.py append_config "basebandguard"
 	python main.py append_config "droidspaces"
-	if [[ "$FULL_LTO" == "true" ]]; then
-		python main.py append_config "full_lto"
-	fi
+}
+
+function do_localversion(){
+	cd "$BASE_DIR"
 	python main.py update_localversion
+}
+
+function do_kernel(){
+	mkdir -p "$BASE_DIR"/Logs
+
 	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 -j"$CORES"  > >(tee ../Logs/stdout.log) 2> >(tee ../Logs/stderr.log) || { echo "Kernel build failed!"; exit 1; }
