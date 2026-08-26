@@ -110,6 +110,13 @@ Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)
 Build date: $(env TZ='UTC' date +%Y%m%d)
 Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"""
 
+    # Determine if this is a pre-release based on this repository's branch name
+    PRERELEASE_FLAG=""
+    if echo "${GITHUB_REF_NAME:-}" | grep -qiE '(dev|experimental)'; then
+        echo "Branch '${GITHUB_REF_NAME}' matched dev/experimental — marking as pre-release."
+        PRERELEASE_FLAG="--prerelease"
+    fi
+
     # Check if release exists
     if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
         echo "Release $TAG exists, uploading asset..."
@@ -120,7 +127,8 @@ Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/run
             --title "$TITLE" \
             --notes "$NOTES" \
             --target "$GITHUB_REF_NAME" \
-            --repo "$REPO" || gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Release creation/upload failed!"; exit 1; }
+            --repo "$REPO" \
+            $PRERELEASE_FLAG || gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Release creation/upload failed!"; exit 1; }
     fi
 	if [[ -n $UPLOAD_URL ]];then
 		python main.py upload "$file_name" "$UPLOAD_URL"
