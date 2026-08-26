@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     container:
       image: fedora:44
+      options: --privileged
     strategy:
       matrix:
         build_type: ["normal", "ksu", "susfs"]
@@ -43,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: |
           dnf update -y
-          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests
+          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng
 
       - name: Authenticate GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
@@ -74,6 +75,18 @@ jobs:
 
       - name: Setup Clang
         run: bash build.sh clang
+
+      - name: Setup Baseband-guard
+        run: bash build.sh bbg
+
+      - name: Apply Patches
+        run: bash build.sh patches
+
+      - name: Setup DroidSpaces
+        run: bash build.sh droidspaces
+
+      - name: Setup Localversion
+        run: bash build.sh localversion
 
       - name: Build Kernel
         run: bash build.sh kernel

@@ -54,6 +54,17 @@ def write_config():
 
     DTBO_PATH = f"{BASE_DIR}/out/arch/{ARCH}/boot/dts/mediatek/{DEVICE}.dtbo" if DEVICE else None
 
+    import datetime, zoneinfo
+    KERNEL_NAME = os.environ.get('KERNEL_NAME', 'kernel')
+    GITHUB_RUN_ID = os.environ.get('GITHUB_RUN_ID', '')
+    date_str = datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Jakarta')).strftime('%Y%m%d')
+    ZIP_NAME = f"{GITHUB_RUN_ID}-{KERNEL_NAME}-kernel-{DEVICE}"
+    if BUILD_TYPE == 'susfs':
+        ZIP_NAME += f"-resukisu-susfs"
+    elif BUILD_TYPE == 'ksu':
+        ZIP_NAME += f"-resukisu"
+    ZIP_NAME += f"-{date_str}"
+
     print("New configuration:")
     print(f"BASE_DIR={BASE_DIR}")
     print(f"KERNEL_IMG={KERNEL_IMG}")
@@ -62,14 +73,15 @@ def write_config():
     print(f"KERNEL_DEFCONFIG={KERNEL_DEFCONFIG}")
     print(f"DTB_PATH={DTB_PATH}")
     print(f"DTBO_PATH={DTBO_PATH}")
+    print(f"ZIP_NAME={ZIP_NAME}")
 
-    NEW_CONFIG = f"""export B_TYPE="{BUILD_TYPE}"
+    NEW_CONFIG = f'''export B_TYPE="{BUILD_TYPE}"
 export DEVICE="{DEVICE}"
 export KERN_IMG="{KERNEL_IMG}"
 export DTB_PATH="{DTB_PATH}"
 export DTBO_PATH="{DTBO_PATH}"
 export KERN_DEFCONFIG="{KERNEL_DEFCONFIG}"
-    """
+export ZIP_NAME="{ZIP_NAME}"'''
 
     # Replace the placeholder "# Reserved" in config.sh with NEW_CONFIG
     cfg_path = os.path.join(BASE_DIR, "config.sh")
@@ -154,10 +166,10 @@ def update_localversion():
                 defconfig_file.write(f'\nCONFIG_LOCALVERSION="-{new_localversion}"\n')
     print(f"Localversion updated to -{new_localversion} in {DEFCONFIG_PATH}")
 
-def append_config(config_name):
+def append_config(config_name, arch=None, defconfig=None):
     load_config()
-    KERN_DEFCONFIG = os.environ.get('KERN_DEFCONFIG', None)
-    DEFCONFIG_PATH = os.path.join(os.getcwd(), "kernel", "arch", os.environ.get('ARCH', ''), "configs", KERN_DEFCONFIG)
+    KERN_DEFCONFIG = os.environ.get('KERN_DEFCONFIG', defconfig)
+    DEFCONFIG_PATH = os.path.join(os.getcwd(), "kernel", "arch", os.environ.get('ARCH', arch), "configs", KERN_DEFCONFIG)
     if config_name == 'ksu':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_MANUAL_HOOK=y\nCONFIG_NOMOUNT=y\n')
