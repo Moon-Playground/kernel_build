@@ -66,11 +66,15 @@ function do_patches(){
 			ln -sf $(which cpio) kernel/tools/build/cpio
 		fi
 	fi
-	if [[ "$B_TYPE" == "ksu" ]]; then
+	if [[ "$B_TYPE" == "ksu" || "$B_TYPE" == "ksu-spoof" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
 		cd kernel
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
+	fi
+
+	if [[ "$B_TYPE" == "spoof" || "$B_TYPE" == "ksu-spoof" ]]; then
+		git -C kernel am --3way "$BASE_DIR"/patches/0002-kernel-Fake-uname-to-5.10.239.patch || { echo "Patch application failed!"; exit 1; }
 	fi
 }
 
@@ -107,7 +111,7 @@ function do_anykernel(){
 			echo "Skipping dtbo.img as SHIP_DTBO is set to 0"
 		fi
 		cd "$ZIP_DIR"
-		if [[ "$B_TYPE" == "ksu" ]]; then
+		if [[ "$B_TYPE" == "ksu" || "$B_TYPE" == "ksu-spoof" ]]; then
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU for $DEVICE#g" anykernel.sh
 		else
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel for $DEVICE#g" anykernel.sh

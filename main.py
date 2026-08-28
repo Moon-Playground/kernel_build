@@ -59,8 +59,10 @@ def write_config():
     GITHUB_RUN_ID = os.environ.get('GITHUB_RUN_ID', '')
     date_str = datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Jakarta')).strftime('%Y%m%d')
     ZIP_NAME = f"{GITHUB_RUN_ID}-{KERNEL_NAME}-kernel-{DEVICE}"
-    if BUILD_TYPE == 'ksu':
+    if BUILD_TYPE == 'ksu' or BUILD_TYPE == 'ksu-spoof':
         ZIP_NAME += f"-resukisu"
+    if BUILD_TYPE == 'spoof' or BUILD_TYPE == 'ksu-spoof':
+        ZIP_NAME += f"-spoof"
     ZIP_NAME += f"-{date_str}"
 
     print("New configuration:")
@@ -122,7 +124,7 @@ def update_localversion():
                 )
             ):
                 old_localversion = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
-                if build_type == 'ksu':
+                if build_type == 'ksu' or build_type == 'ksu-spoof':
                     new_localversion = old_localversion + '-#'
                 else:
                     new_localversion = old_localversion
@@ -137,7 +139,7 @@ def update_localversion():
                     or line.strip().startswith("# CONFIG_LOCALVERSION_EXTEND")
                 )
             ):
-                if build_type == 'ksu':
+                if build_type == 'ksu' or build_type == 'ksu-spoof':
                     new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
                 else:
                     new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
@@ -150,7 +152,7 @@ def update_localversion():
                 defconfig_file.write(line)
     if not localversion_found:
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
-            if build_type == 'ksu':
+            if build_type == 'ksu' or build_type == 'ksu-spoof':
                 new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
             else:
                 new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
@@ -162,7 +164,7 @@ def append_config(config_name, arch=None, defconfig=None):
     load_config()
     KERN_DEFCONFIG = os.environ.get('KERN_DEFCONFIG', defconfig)
     DEFCONFIG_PATH = os.path.join(os.getcwd(), "kernel", "arch", os.environ.get('ARCH', arch), "configs", KERN_DEFCONFIG)
-    if config_name == 'ksu':
+    if config_name == 'ksu' or config_name == 'ksu-spoof':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_MANUAL_HOOK=y\nCONFIG_NOMOUNT=y\n')
     elif config_name == 'droidspaces':
