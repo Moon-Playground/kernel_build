@@ -1,4 +1,4 @@
-From 1d6487a4965989be00fe6de3492697021b19186a Mon Sep 17 00:00:00 2001
+From 1bdba83d4050b44836b8060682298997f58fbaa9 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Wed, 15 Jul 2026 19:22:04 +0700
 Subject: [PATCH] gale: ReSukiSU manual hook
@@ -6,7 +6,7 @@ Subject: [PATCH] gale: ReSukiSU manual hook
 Signed-off-by: wulan17 <wulan17@komodos.id>
 
 diff --git a/drivers/input/input.c b/drivers/input/input.c
-index 70ffffea3..e23479aed 100644
+index 70ffffea3e58..e23479aed885 100644
 --- a/drivers/input/input.c
 +++ b/drivers/input/input.c
 @@ -444,10 +444,21 @@ static void input_handle_event(struct input_dev *dev,
@@ -32,11 +32,11 @@ index 70ffffea3..e23479aed 100644
  	if (is_event_supported(type, dev->evbit, EV_MAX)) {
  
 diff --git a/fs/exec.c b/fs/exec.c
-index eef84ebca..c349aeee6 100644
+index 4f9dd488d2a8..281e7740a3ab 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -1911,12 +1911,21 @@ int do_execve_file(struct file *file, void *__argv, void *__envp)
- 	return __do_execve_file(AT_FDCWD, NULL, argv, envp, 0, file);
+@@ -1891,12 +1891,21 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 	return retval;
  }
  
 +#ifdef CONFIG_KSU_MANUAL_HOOK
@@ -57,7 +57,7 @@ index eef84ebca..c349aeee6 100644
  	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
  }
  
-@@ -1944,6 +1953,9 @@ static int compat_do_execve(struct filename *filename,
+@@ -1924,6 +1933,9 @@ static int compat_do_execve(struct filename *filename,
  		.is_compat = true,
  		.ptr.compat = __envp,
  	};
@@ -68,10 +68,10 @@ index eef84ebca..c349aeee6 100644
  }
  
 diff --git a/fs/open.c b/fs/open.c
-index cb70b65b8..e23694399 100644
+index 0a061ce641f2..264888b95df1 100644
 --- a/fs/open.c
 +++ b/fs/open.c
-@@ -451,8 +451,17 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
+@@ -477,8 +477,17 @@ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
  	return res;
  }
  
@@ -86,11 +86,11 @@ index cb70b65b8..e23694399 100644
 +#ifdef CONFIG_KSU_MANUAL_HOOK
 +	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 +#endif
- 	return do_faccessat(dfd, filename, mode);
+ 	return do_faccessat(dfd, filename, mode, 0);
  }
  
 diff --git a/fs/read_write.c b/fs/read_write.c
-index 650fc7e0f..cf98a6c51 100644
+index ec2d20ddd766..ffb68f805fda 100644
 --- a/fs/read_write.c
 +++ b/fs/read_write.c
 @@ -585,9 +585,19 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
@@ -114,7 +114,7 @@ index 650fc7e0f..cf98a6c51 100644
  }
  
 diff --git a/fs/stat.c b/fs/stat.c
-index 376543199..8d8b8b885 100644
+index 376543199b5a..2c442c57a047 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -352,6 +352,17 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
@@ -176,7 +176,7 @@ index 376543199..8d8b8b885 100644
  	if (error)
  		return error;
 diff --git a/kernel/reboot.c b/kernel/reboot.c
-index 3a87fee47..fe9468e84 100644
+index 3a87fee47d3a..fe9468e84afb 100644
 --- a/kernel/reboot.c
 +++ b/kernel/reboot.c
 @@ -305,13 +305,21 @@ DEFINE_MUTEX(system_transition_mutex);
@@ -203,7 +203,7 @@ index 3a87fee47..fe9468e84 100644
  	if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))
  		return -EPERM;
 diff --git a/kernel/sys.c b/kernel/sys.c
-index 173408428..f93e69dbe 100644
+index f8d52c9042fe..33b1e540fdba 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
 @@ -630,6 +630,10 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
