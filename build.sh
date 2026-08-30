@@ -163,6 +163,7 @@ Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/run
 		python main.py upload "$file_name" "$UPLOAD_URL"
 	fi
     echo "Released successfully."
+	echo "https://github.com/$REPO/releases/tag/$TAG"	
 }
 
 function do_help() {
