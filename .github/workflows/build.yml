@@ -1,0 +1,121 @@
+name: Build Kernel
+
+on:
+    workflow_call:
+        inputs:
+            build_type:
+                description: 'Build type'
+                required: true
+                default: 'normal'
+                type: string
+            kernel_repo:
+                description: 'Kernel repository to build'
+                required: true
+                default: 'Mayuri-Chan/android_kernel_xiaomi_gale'
+                type: string
+            kernel_branch:
+                description: 'Kernel branch to build'
+                required: true
+                default: 'stable'
+                type: string
+            kernel_defconfig:
+                description: 'defconfig to build the kernel'
+                required: true
+                default: 'gale_defconfig'
+                type: string
+            kernel_img:
+                description: 'Kernel image name'
+                required: false
+                default: 'Image.gz'
+                type: string
+            kernel_dtb:
+                description: 'Kernel dtb name'
+                required: false
+                default: 'mediatek/mt6768.dtb'
+                type: string
+
+jobs:
+  build_kernel:
+    name: Build ${{ inputs.build_type }}${{ matrix.spoof == true && '-spoof' || '' }}
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: fedora:44
+      options: --privileged
+    strategy:
+      matrix:
+        spoof: [false, true]
+    steps:
+      - name: Checkout script
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          dnf update -y
+          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Clone kernel
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.kernel_repo }}
+          path: kernel
+          ref: ${{ inputs.kernel_branch }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-strict: "false"
+          submodules: "recursive"
+
+      - name: Setup KernelSU
+        if: ${{ inputs.build_type == 'ksu' }}
+        run: |
+          cd kernel
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+
+      - name: Write Config
+        run: python main.py write_config
+        env:
+          KERNEL_DEFCONFIG: ${{ inputs.kernel_defconfig }}
+          BUILD_TYPE: ${{ inputs.build_type }}
+          KERNEL_IMG: ${{ inputs.kernel_img }}
+          KERNEL_DTB: ${{ inputs.kernel_dtb }}
+          SPOOF: ${{ matrix.spoof }}
+
+      - name: Setup Clang
+        run: bash build.sh clang
+
+      - name: Setup Baseband-guard
+        run: bash build.sh bbg
+
+      - name: Apply Patches
+        run: bash build.sh patches
+
+      - name: Setup DroidSpaces
+        run: bash build.sh droidspaces
+
+      - name: Setup Localversion
+        run: bash build.sh localversion
+
+      - name: Build Kernel
+        run: bash build.sh kernel
+
+      - name: Compress AnyKernel
+        run: bash build.sh anykernel
+
+      - name: Upload vmlinux
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.build_type }}-vmlinux${{ matrix.spoof == true && '-spoof' || '' }}
+          path: out/vmlinux
+
+      - name: Upload logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.build_type }}-build-logs${{ matrix.spoof == true && '-spoof' || '' }}
+          path: Logs/
+
+      - name: Release kernel
+        run: bash build.sh release
+        env:
+          UPLOAD_URL: ${{ secrets.UPLOAD_URL }}

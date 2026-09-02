@@ -30,6 +30,7 @@ def write_config():
     KERNEL_IMG = os.environ.get('KERNEL_IMG', None)
     KERNEL_DTB = os.environ.get('KERNEL_DTB', None)
     BUILD_TYPE = os.environ.get('BUILD_TYPE', None)
+    SPOOF = str(os.environ.get('SPOOF', 'false')).lower() == 'true'
     KERNEL_IMG = f"{BASE_DIR}/out/arch/{ARCH}/boot/{KERNEL_IMG}" if ARCH and KERNEL_IMG else None
     KERNEL_DEFCONFIG = os.environ.get('KERNEL_DEFCONFIG', None)
     DTB_PATH = f"{BASE_DIR}/out/arch/{ARCH}/boot/dts/{KERNEL_DTB}" if ARCH and KERNEL_DTB else None
@@ -59,9 +60,9 @@ def write_config():
     GITHUB_RUN_ID = os.environ.get('GITHUB_RUN_ID', '')
     date_str = datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Jakarta')).strftime('%Y%m%d')
     ZIP_NAME = f"{GITHUB_RUN_ID}-{KERNEL_NAME}-kernel-{DEVICE}"
-    if BUILD_TYPE == 'ksu' or BUILD_TYPE == 'ksu-spoof':
+    if BUILD_TYPE == 'ksu':
         ZIP_NAME += f"-resukisu"
-    if BUILD_TYPE == 'spoof' or BUILD_TYPE == 'ksu-spoof':
+    if SPOOF:
         ZIP_NAME += f"-spoof"
     ZIP_NAME += f"-{date_str}"
 
@@ -70,12 +71,14 @@ def write_config():
     print(f"KERNEL_IMG={KERNEL_IMG}")
     print(f"DEVICE={DEVICE}")
     print(f"BUILD_TYPE={BUILD_TYPE}")
+    print(f"SPOOF={SPOOF}")
     print(f"KERNEL_DEFCONFIG={KERNEL_DEFCONFIG}")
     print(f"DTB_PATH={DTB_PATH}")
     print(f"DTBO_PATH={DTBO_PATH}")
     print(f"ZIP_NAME={ZIP_NAME}")
 
     NEW_CONFIG = f'''export B_TYPE="{BUILD_TYPE}"
+export SPOOF="{SPOOF}"
 export DEVICE="{DEVICE}"
 export KERN_IMG="{KERNEL_IMG}"
 export DTB_PATH="{DTB_PATH}"
@@ -124,7 +127,7 @@ def update_localversion():
                 )
             ):
                 old_localversion = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
-                if build_type == 'ksu' or build_type == 'ksu-spoof':
+                if build_type == 'ksu':
                     new_localversion = old_localversion + '-#'
                 else:
                     new_localversion = old_localversion
@@ -139,7 +142,7 @@ def update_localversion():
                     or line.strip().startswith("# CONFIG_LOCALVERSION_EXTEND")
                 )
             ):
-                if build_type == 'ksu' or build_type == 'ksu-spoof':
+                if build_type == 'ksu':
                     new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
                 else:
                     new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
@@ -152,7 +155,7 @@ def update_localversion():
                 defconfig_file.write(line)
     if not localversion_found:
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
-            if build_type == 'ksu' or build_type == 'ksu-spoof':
+            if build_type == 'ksu':
                 new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
             else:
                 new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
@@ -164,7 +167,7 @@ def append_config(config_name, arch=None, defconfig=None):
     load_config()
     KERN_DEFCONFIG = os.environ.get('KERN_DEFCONFIG', defconfig)
     DEFCONFIG_PATH = os.path.join(os.getcwd(), "kernel", "arch", os.environ.get('ARCH', arch), "configs", KERN_DEFCONFIG)
-    if config_name == 'ksu' or config_name == 'ksu-spoof':
+    if config_name == 'ksu':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_MANUAL_HOOK=y\nCONFIG_NOMOUNT=y\n')
     elif config_name == 'droidspaces':

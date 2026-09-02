@@ -66,14 +66,14 @@ function do_patches(){
 			ln -sf $(which cpio) kernel/tools/build/cpio
 		fi
 	fi
-	if [[ "$B_TYPE" == "ksu" || "$B_TYPE" == "ksu-spoof" ]]; then
+	if [[ "$B_TYPE" == "ksu" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
 		cd kernel
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	fi
 
-	if [[ "$B_TYPE" == "spoof" || "$B_TYPE" == "ksu-spoof" ]]; then
+	if [[ "$SPOOF" == "True" || "$SPOOF" == "true" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0002-kernel-Fake-uname-to-5.10.239.patch || { echo "Patch application failed!"; exit 1; }
 	fi
 }
