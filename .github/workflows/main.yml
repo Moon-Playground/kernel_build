@@ -29,85 +29,38 @@ on:
 
 
 jobs:
-  build_kernel:
-    runs-on: ubuntu-24.04-arm
-    container:
-      image: fedora:44
-      options: --privileged
-    strategy:
-      matrix:
-        build_type: ["normal", "spoof", "ksu", "ksu-spoof", "susfs", "susfs-spoof"]
-    steps:
-      - name: Checkout script
-        uses: actions/checkout@v4
+  build_normal:
+    name: Build Normal
+    uses: ./.github/workflows/build.yml
+    with:
+      build_type: "normal"
+      kernel_repo: ${{ github.event.inputs.kernel_repo }}
+      kernel_branch: ${{ github.event.inputs.kernel_branch }}
+      kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
+      kernel_img: ${{ github.event.inputs.kernel_img }}
+      kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
+    secrets: inherit
 
-      - name: Install dependencies
-        run: |
-          dnf update -y
-          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng
+  build_ksu:
+    name: Build KernelSU
+    uses: ./.github/workflows/build.yml
+    with:
+      build_type: "ksu"
+      kernel_repo: ${{ github.event.inputs.kernel_repo }}
+      kernel_branch: ${{ github.event.inputs.kernel_branch }}
+      kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
+      kernel_img: ${{ github.event.inputs.kernel_img }}
+      kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
+    secrets: inherit
 
-      - name: Authenticate GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: Clone kernel
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.inputs.kernel_repo }}
-          path: kernel
-          ref: ${{ github.event.inputs.kernel_branch }}
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-strict: "false"
-          submodules: "recursive"
-
-      - name: Setup KernelSU
-        if: ${{ matrix.build_type == 'ksu' || matrix.build_type == 'ksu-spoof' || matrix.build_type == 'susfs' || matrix.build_type == 'susfs-spoof' }}
-        run: |
-          cd kernel
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
-
-      - name: Write Config
-        run: python main.py write_config
-        env:
-          KERNEL_DEFCONFIG: ${{ github.event.inputs.kernel_defconfig }}
-          BUILD_TYPE: ${{ matrix.build_type }}
-          KERNEL_IMG: ${{ github.event.inputs.kernel_img }}
-          KERNEL_DTB: ${{ github.event.inputs.kernel_dtb }}
-
-      - name: Setup Clang
-        run: bash build.sh clang
-
-      - name: Setup Baseband-guard
-        run: bash build.sh bbg
-
-      - name: Apply Patches
-        run: bash build.sh patches
-
-      - name: Setup DroidSpaces
-        run: bash build.sh droidspaces
-
-      - name: Setup Localversion
-        run: bash build.sh localversion
-
-      - name: Build Kernel
-        run: bash build.sh kernel
-
-      - name: Compress AnyKernel
-        run: bash build.sh anykernel
-
-      - name: Upload vmlinux
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.build_type }}-vmlinux
-          path: out/vmlinux
-
-      - name: Upload logs
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.build_type }}-build-logs
-          path: Logs/
-
-      - name: Release kernel
-        run: bash build.sh release
-        env:
-          UPLOAD_URL: ${{ secrets.UPLOAD_URL }}
+  build_susfs:
+    name: Build SUSFS
+    uses: ./.github/workflows/build.yml
+    with:
+      build_type: "susfs"
+      kernel_repo: ${{ github.event.inputs.kernel_repo }}
+      kernel_branch: ${{ github.event.inputs.kernel_branch }}
+      kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
+      kernel_img: ${{ github.event.inputs.kernel_img }}
+      kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
+    secrets: inherit
