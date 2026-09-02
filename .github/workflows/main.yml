@@ -36,7 +36,7 @@ jobs:
       options: --privileged
     strategy:
       matrix:
-        build_type: ["normal", "spoof", "ksu", "ksu-spoof"]
+        build_type: ["normal", "spoof", "ksu", "ksu-spoof", "susfs", "susfs-spoof"]
     steps:
       - name: Checkout script
         uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
           submodules: "recursive"
 
       - name: Setup KernelSU
-        if: ${{ matrix.build_type == 'ksu' || matrix.build_type == 'ksu-spoof' }}
+        if: ${{ matrix.build_type == 'ksu' || matrix.build_type == 'ksu-spoof' || matrix.build_type == 'susfs' || matrix.build_type == 'susfs-spoof' }}
         run: |
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash

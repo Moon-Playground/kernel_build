@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import sys
 
@@ -59,9 +60,11 @@ def write_config():
     GITHUB_RUN_ID = os.environ.get('GITHUB_RUN_ID', '')
     date_str = datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Jakarta')).strftime('%Y%m%d')
     ZIP_NAME = f"{GITHUB_RUN_ID}-{KERNEL_NAME}-kernel-{DEVICE}"
-    if BUILD_TYPE == 'ksu' or BUILD_TYPE == 'ksu-spoof':
+    if re.search(r'susfs', BUILD_TYPE):
+        ZIP_NAME += f"-resukisu-susfs"
+    elif re.search(r'ksu', BUILD_TYPE):
         ZIP_NAME += f"-resukisu"
-    if BUILD_TYPE == 'spoof' or BUILD_TYPE == 'ksu-spoof':
+    if re.search(r'spoof', BUILD_TYPE):
         ZIP_NAME += f"-spoof"
     ZIP_NAME += f"-{date_str}"
 
@@ -126,6 +129,8 @@ def update_localversion():
                 old_localversion = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
                 if build_type == 'ksu' or build_type == 'ksu-spoof':
                     new_localversion = old_localversion + '-#'
+                elif build_type == 'susfs':
+                    new_localversion = old_localversion + '-ඞ'
                 else:
                     new_localversion = old_localversion
                 defconfig_file.write(f'CONFIG_LOCALVERSION="{new_localversion}"\n')
@@ -141,6 +146,8 @@ def update_localversion():
             ):
                 if build_type == 'ksu' or build_type == 'ksu-spoof':
                     new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
+                elif build_type == 'susfs':
+                    new_localversion = os.environ.get('KERNEL_NAME') + '-ඞ' if os.environ.get('KERNEL_NAME') else 'ඞ'
                 else:
                     new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
                 if new_localversion:
@@ -154,6 +161,8 @@ def update_localversion():
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             if build_type == 'ksu' or build_type == 'ksu-spoof':
                 new_localversion = os.environ.get('KERNEL_NAME') + '-#' if os.environ.get('KERNEL_NAME') else '#'
+            elif build_type == 'susfs':
+                new_localversion = os.environ.get('KERNEL_NAME') + '-ඞ' if os.environ.get('KERNEL_NAME') else 'ඞ'
             else:
                 new_localversion = os.environ.get('KERNEL_NAME') if os.environ.get('KERNEL_NAME') else ''
             if new_localversion:
@@ -167,6 +176,9 @@ def append_config(config_name, arch=None, defconfig=None):
     if config_name == 'ksu' or config_name == 'ksu-spoof':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_MANUAL_HOOK=y\nCONFIG_NOMOUNT=y\n')
+    elif config_name == 'susfs':
+        with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
+            defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_SUSFS=y\nCONFIG_NOMOUNT=y\n')
     elif config_name == 'droidspaces':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             with open(os.path.join(os.getcwd(), "droidspaces_config"), 'r', encoding='utf-8') as f:
@@ -197,7 +209,7 @@ def show_help():
     print("Available arguments:")
     print("  write_config               - Setup configuration.")
     print("  update_localversion        - Update kernel localversion.")
-    print("  append_config <name>       - Write <name> config to defconfig.")
+    print("  append_config <ksu/susfs>  - Write ksu/susfs config to defconfig.")
     print("  upload <filename> <url>    - Upload file to given url.")
     print("  help                       - Show help.")
 
