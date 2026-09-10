@@ -52,3 +52,15 @@ jobs:
       kernel_img: ${{ github.event.inputs.kernel_img }}
       kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
     secrets: inherit
+
+  build_susfs:
+    name: Build KernelSUS
+    uses: ./.github/workflows/build.yml
+    with:
+      build_type: "susfs"
+      kernel_repo: ${{ github.event.inputs.kernel_repo }}
+      kernel_branch: ${{ github.event.inputs.kernel_branch }}
+      kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
+      kernel_img: ${{ github.event.inputs.kernel_img }}
+      kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
+    secrets: inherit

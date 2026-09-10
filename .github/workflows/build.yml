@@ -67,7 +67,7 @@ jobs:
           submodules: "recursive"
 
       - name: Setup KernelSU
-        if: ${{ inputs.build_type == 'ksu' }}
+        if: ${{ inputs.build_type == 'ksu' || inputs.build_type == 'susfs' }}
         run: |
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
