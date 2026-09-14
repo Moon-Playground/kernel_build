@@ -128,21 +128,32 @@ function do_release() {
     # Upload to GitHub Releases using GitHub CLI
     file_name="$ZIP_NAME".zip
 
-    TAG="$DEVICE"-"$GITHUB_RUN_ID"
+    RUN_ID="${GITHUB_RUN_ID:-${CIRCLE_BUILD_NUM:-${CIRCLE_WORKFLOW_ID:-manual}}}"
+    TAG="$DEVICE"-"$RUN_ID"
     ASSET="$BASE_DIR/dist/$file_name"
-    REPO="$GITHUB_REPOSITORY"
+
+    if [ -n "$GITHUB_REPOSITORY" ]; then
+        REPO="$GITHUB_REPOSITORY"
+    elif [ -n "$CIRCLE_PROJECT_USERNAME" ] && [ -n "$CIRCLE_PROJECT_REPONAME" ]; then
+        REPO="$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME"
+    else
+        REPO="Moon-Playground/kernel_build"
+    fi
+
+    BRANCH_NAME="${GITHUB_REF_NAME:-${CIRCLE_BRANCH:-main}}"
+
     DEVICE_TITLE="${DEVICE^}"
-    TITLE="$DEVICE_TITLE ($(env TZ='UTC' date +%Y%m%d)) ($GITHUB_RUN_ID)"
+    TITLE="$DEVICE_TITLE ($(env TZ='UTC' date +%Y%m%d)) ($RUN_ID)"
     NOTES="""$KERNEL_NAME Kernel
 Device: $DEVICE_TITLE
-Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)
+Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD 2>/dev/null || echo "N/A")
 Build date: $(env TZ='UTC' date +%Y%m%d)
-Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"""
+Run id: $RUN_ID"""
 
-    # Determine if this is a pre-release based on this repository's branch name
+    # Determine if this is a pre-release based on branch name
     PRERELEASE_FLAG=""
-    if echo "${GITHUB_REF_NAME:-}" | grep -qiE '(dev|experimental)'; then
-        echo "Branch '${GITHUB_REF_NAME}' matched dev/experimental — marking as pre-release."
+    if echo "${BRANCH_NAME}" | grep -qiE '(dev|experimental)'; then
+        echo "Branch '${BRANCH_NAME}' matched dev/experimental — marking as pre-release."
         PRERELEASE_FLAG="--prerelease"
     fi
 
@@ -155,7 +166,7 @@ Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/run
         gh release create "$TAG" "$ASSET" \
             --title "$TITLE" \
             --notes "$NOTES" \
-            --target "$GITHUB_REF_NAME" \
+            --target "$BRANCH_NAME" \
             --repo "$REPO" \
             $PRERELEASE_FLAG || gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Release creation/upload failed!"; exit 1; }
     fi

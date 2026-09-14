@@ -80,6 +80,7 @@ jobs:
           KERNEL_IMG: ${{ inputs.kernel_img }}
           KERNEL_DTB: ${{ inputs.kernel_dtb }}
           SPOOF: ${{ matrix.spoof }}
+          USE_FULL_LTO: 'false'
 
       - name: Setup Clang
         run: bash build.sh clang

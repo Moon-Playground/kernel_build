@@ -1,0 +1,165 @@
+version: 2.1
+
+parameters:
+  run_workflow:
+    type: boolean
+    default: false
+  use_full_lto:
+    type: boolean
+    default: false
+  kernel_repo:
+    type: string
+    default: "Mayuri-Chan/android_kernel_xiaomi_gale"
+  kernel_branch:
+    type: string
+    default: "stable"
+  kernel_defconfig:
+    type: string
+    default: "gale_defconfig"
+  kernel_img:
+    type: string
+    default: "Image.gz"
+  kernel_dtb:
+    type: string
+    default: "mediatek/mt6768.dtb"
+
+executors:
+  arm-large-executor:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.large
+
+commands:
+  build_kernel_job:
+    parameters:
+      build_type:
+        type: string
+      spoof:
+        type: boolean
+        default: false
+    steps:
+      - run:
+          name: Checkout build repository via HTTPS
+          command: |
+            rm -rf ./* ./.* 2>/dev/null || true
+            git clone https://github.com/${CIRCLE_PROJECT_USERNAME:-Moon-Playground}/${CIRCLE_PROJECT_REPONAME:-kernel_build}.git .
+            if [ -n "$CIRCLE_SHA1" ]; then
+              git checkout "$CIRCLE_SHA1"
+            fi
+
+      - run:
+          name: Setup 32GB Loop Swap
+          command: |
+            sudo df -h /
+            sudo swapoff -a 2>/dev/null || true
+            sudo rm -f /mnt/swapfile
+            sudo fallocate -l 32G /mnt/swapfile
+            sudo chmod 0600 /mnt/swapfile
+            LOOP_DEV=$(sudo losetup -f --show /mnt/swapfile)
+            sudo mkswap "$LOOP_DEV"
+            sudo swapon "$LOOP_DEV"
+            free -h
+
+      - run:
+          name: Run Containerized Build Steps
+          command: |
+            docker run --privileged --rm \
+              -e KERNEL_DEFCONFIG="<< pipeline.parameters.kernel_defconfig >>" \
+              -e BUILD_TYPE="<< parameters.build_type >>" \
+              -e KERNEL_IMG="<< pipeline.parameters.kernel_img >>" \
+              -e KERNEL_DTB="<< pipeline.parameters.kernel_dtb >>" \
+              -e SPOOF="<< parameters.spoof >>" \
+              -e USE_FULL_LTO="<< pipeline.parameters.use_full_lto >>" \
+              -e GITHUB_TOKEN="$GITHUB_TOKEN" \
+              -e UPLOAD_URL="$UPLOAD_URL" \
+              -e CIRCLECI="$CIRCLECI" \
+              -e CIRCLE_BUILD_NUM="$CIRCLE_BUILD_NUM" \
+              -e CIRCLE_WORKFLOW_ID="$CIRCLE_WORKFLOW_ID" \
+              -e CIRCLE_PROJECT_USERNAME="$CIRCLE_PROJECT_USERNAME" \
+              -e CIRCLE_PROJECT_REPONAME="$CIRCLE_PROJECT_REPONAME" \
+              -e CIRCLE_BRANCH="$CIRCLE_BRANCH" \
+              -v $(pwd):/workspace \
+              -w /workspace \
+              fedora:44 bash -c '
+                set -e
+
+                echo "=== Installing Dependencies ==="
+                dnf update -y
+                dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng
+
+                if [ -n "$GITHUB_TOKEN" ]; then
+                  echo "$GITHUB_TOKEN" | gh auth login --with-token || true
+                fi
+
+                echo "=== Cloning Kernel Repository ==="
+                git clone --recursive -b "<< pipeline.parameters.kernel_branch >>" "https://github.com/<< pipeline.parameters.kernel_repo >>.git" kernel
+
+                if [ "<< parameters.build_type >>" = "ksu" ] || [ "<< parameters.build_type >>" = "susfs" ]; then
+                  echo "=== Setting up KernelSU ==="
+                  cd kernel
+                  curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+                  cd ..
+                fi
+
+                echo "=== Writing Config ==="
+                python3 main.py write_config
+
+                echo "=== Setting up Clang ==="
+                bash build.sh clang
+
+                echo "=== Setting up Baseband-guard ==="
+                bash build.sh bbg
+
+                echo "=== Applying Patches ==="
+                bash build.sh patches
+
+                echo "=== Setting up DroidSpaces ==="
+                bash build.sh droidspaces
+
+                echo "=== Setting up Localversion ==="
+                bash build.sh localversion
+
+                echo "=== Building Kernel ==="
+                bash build.sh kernel
+
+                echo "=== Compressing AnyKernel ==="
+                bash build.sh anykernel
+
+                echo "=== Releasing Kernel ==="
+                bash build.sh release || true
+              '
+
+      - store_artifacts:
+          path: out/vmlinux
+          destination: << parameters.build_type >>-vmlinux<<# parameters.spoof >>-spoof<</ parameters.spoof >>-<<# pipeline.parameters.use_full_lto >>full_lto<</ pipeline.parameters.use_full_lto >><<^ pipeline.parameters.use_full_lto >>thinlto<</ pipeline.parameters.use_full_lto >>
+
+      - store_artifacts:
+          path: Logs/
+          destination: << parameters.build_type >>-build-logs<<# parameters.spoof >>-spoof<</ parameters.spoof >>-<<# pipeline.parameters.use_full_lto >>full_lto<</ pipeline.parameters.use_full_lto >><<^ pipeline.parameters.use_full_lto >>thinlto<</ pipeline.parameters.use_full_lto >>
+
+jobs:
+  build-job:
+    parameters:
+      build_type:
+        type: string
+      spoof:
+        type: boolean
+    executor: arm-large-executor
+    steps:
+      - build_kernel_job:
+          build_type: << parameters.build_type >>
+          spoof: << parameters.spoof >>
+
+workflows:
+  version: 2
+  build-kernel-workflow:
+    when: << pipeline.parameters.run_workflow >>
+    jobs:
+      - build-job:
+          matrix:
+            parameters:
+              build_type: ["normal", "ksu"]
+              spoof: [false, true]
+
+
+

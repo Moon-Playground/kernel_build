@@ -34,6 +34,7 @@ def write_config():
     KERNEL_IMG = f"{BASE_DIR}/out/arch/{ARCH}/boot/{KERNEL_IMG}" if ARCH and KERNEL_IMG else None
     KERNEL_DEFCONFIG = os.environ.get('KERNEL_DEFCONFIG', None)
     DTB_PATH = f"{BASE_DIR}/out/arch/{ARCH}/boot/dts/{KERNEL_DTB}" if ARCH and KERNEL_DTB else None
+    USE_FULL_LTO = str(os.environ.get('USE_FULL_LTO', 'false')).lower() == 'true'
 
     defconfig = {}
     if ARCH and KERNEL_DEFCONFIG:
@@ -64,6 +65,11 @@ def write_config():
         ZIP_NAME += f"-resukisu"
     if SPOOF:
         ZIP_NAME += f"-spoof"
+    if USE_FULL_LTO:
+        ZIP_NAME += f"-full_lto"
+        append_config(config_name="full_lto", arch=ARCH, defconfig=KERNEL_DEFCONFIG)
+    else:
+        ZIP_NAME += f"-thinlto"
     ZIP_NAME += f"-{date_str}"
 
     print("New configuration:")
@@ -76,6 +82,7 @@ def write_config():
     print(f"DTB_PATH={DTB_PATH}")
     print(f"DTBO_PATH={DTBO_PATH}")
     print(f"ZIP_NAME={ZIP_NAME}")
+    print(f"USE_FULL_LTO={USE_FULL_LTO}")
 
     NEW_CONFIG = f'''export B_TYPE="{BUILD_TYPE}"
 export SPOOF="{SPOOF}"
@@ -84,7 +91,11 @@ export KERN_IMG="{KERNEL_IMG}"
 export DTB_PATH="{DTB_PATH}"
 export DTBO_PATH="{DTBO_PATH}"
 export KERN_DEFCONFIG="{KERNEL_DEFCONFIG}"
-export ZIP_NAME="{ZIP_NAME}"'''
+export ZIP_NAME="{ZIP_NAME}"
+export USE_FULL_LTO="{USE_FULL_LTO}"'''
+    if USE_FULL_LTO:
+        NEW_CONFIG += '\nexport KCFLAGS="-flto-jobs=2"'
+        NEW_CONFIG += '\nexport KAFLAGS="-flto-jobs=2"'
 
     # Replace the placeholder "# Reserved" in config.sh with NEW_CONFIG
     cfg_path = os.path.join(BASE_DIR, "config.sh")
@@ -178,6 +189,17 @@ def append_config(config_name, arch=None, defconfig=None):
     elif config_name == 'basebandguard':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             defconfig_file.write('\n# Baseband-Guard\nCONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"\nCONFIG_BBG=y')
+    elif config_name == "full_lto":
+        with open(DEFCONFIG_PATH, "r", encoding="utf-8") as defconfig_file:
+            lines = defconfig_file.readlines()
+        with open(DEFCONFIG_PATH, "w", encoding="utf-8") as defconfig_file:
+            for line in lines:
+                if line.strip() == "CONFIG_THINLTO=y":
+                    defconfig_file.write("# CONFIG_THINLTO is not set\n")
+                elif line.strip() == "CONFIG_LLVM_POLLY=y":
+                    defconfig_file.write("# CONFIG_LLVM_POLLY is not set\n")
+                else:
+                    defconfig_file.write(line)
 
 def upload(file_name, url):
     load_config()

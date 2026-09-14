@@ -2,7 +2,13 @@
 
 export ARCH="arm64"
 export KBUILD_BUILD_USER="wulan17"
-export KBUILD_BUILD_HOST="Github"
+if [ -n "$CIRCLECI" ]; then
+    export KBUILD_BUILD_HOST="CircleCI"
+elif [ -n "$GITHUB_ACTIONS" ]; then
+    export KBUILD_BUILD_HOST="GitHub"
+else
+    export KBUILD_BUILD_HOST="$(hostname 2>/dev/null || echo 'local')"
+fi
 export KERNEL_NAME="Mayuri"
 export SHIP_DTBO=0 # Set to 1 to ship dtbo.img, 0 to not ship
 
