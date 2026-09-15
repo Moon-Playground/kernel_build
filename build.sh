@@ -74,6 +74,7 @@ function do_patches(){
 	elif [[ "$B_TYPE" == "susfs" ]]; then
 		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
 		git -C kernel am --3way "$BASE_DIR"/patches/0002-gale-Susfs-patch.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/0003-gale-Adapt-susfs.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "susfs"
 		cd kernel
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
