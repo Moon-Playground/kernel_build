@@ -1,4 +1,4 @@
-From 9dd82dca9c83b9e144677764290fb1937862e2a3 Mon Sep 17 00:00:00 2001
+From 5caf1ceea4eef9c2e274e21f80950e62ba0642d7 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Tue, 15 Sep 2026 11:12:02 +0700
 Subject: [PATCH] gale: Adapt susfs
@@ -54,7 +54,7 @@ index e23479aed885..605723bd225c 100644
  	if (is_event_supported(type, dev->evbit, EV_MAX)) {
  
 diff --git a/fs/exec.c b/fs/exec.c
-index d52b00dea5e2..a0a6911d12d6 100644
+index b81ac31bd5b1..3c3b0cf837af 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -1891,7 +1891,7 @@ static int do_execveat_common(int fd, struct filename *filename,
@@ -66,24 +66,15 @@ index d52b00dea5e2..a0a6911d12d6 100644
  __attribute__((hot))
  extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
  				void *argv, void *envp, int *flags);
-@@ -1903,7 +1903,7 @@ int do_execve(struct filename *filename,
+@@ -1906,7 +1906,7 @@ int do_execve(struct filename *filename,
  {
  	struct user_arg_ptr argv = { .ptr.native = __argv };
  	struct user_arg_ptr envp = { .ptr.native = __envp };
 -#ifdef CONFIG_KSU_MANUAL_HOOK
 +#ifdef CONFIG_KSU
- 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
- #endif
- 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
-@@ -1933,7 +1933,7 @@ static int compat_do_execve(struct filename *filename,
- 		.is_compat = true,
- 		.ptr.compat = __envp,
- 	};
--#ifdef CONFIG_KSU_MANUAL_HOOK // 32-bit ksud and 32-on-64 support
-+#ifdef CONFIG_KSU // 32-bit ksud and 32-on-64 support
- 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
- #endif
- 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
+ 	int retval;
+ 	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+ 
 diff --git a/fs/namespace.c b/fs/namespace.c
 index c911f40eb5b8..f8a4affaa33b 100644
 --- a/fs/namespace.c

@@ -1,4 +1,4 @@
-From f4bab0a49c1c9680195efdb524925ea7400fbbe9 Mon Sep 17 00:00:00 2001
+From 38235580431d2c81d2ed68a73cf0e5cc74730f10 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Wed, 15 Jul 2026 19:22:04 +0700
 Subject: [PATCH] gale: ReSukiSU manual hook
@@ -32,10 +32,10 @@ index 70ffffea3e58..e23479aed885 100644
  	if (is_event_supported(type, dev->evbit, EV_MAX)) {
  
 diff --git a/fs/exec.c b/fs/exec.c
-index e69f21958c30..d52b00dea5e2 100644
+index e69f21958c30..b81ac31bd5b1 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -1891,12 +1891,21 @@ static int do_execveat_common(int fd, struct filename *filename,
+@@ -1891,13 +1891,33 @@ static int do_execveat_common(int fd, struct filename *filename,
  	return retval;
  }
  
@@ -43,6 +43,9 @@ index e69f21958c30..d52b00dea5e2 100644
 +__attribute__((hot))
 +extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
 +				void *argv, void *envp, int *flags);
++__attribute__((hot))
++extern int ksu_handle_post_execveat(int *fd, struct filename **filename_ptr,
++				void *argv, void *envp, int *flags, int *retval);
 +#endif
 +
  int do_execve(struct filename *filename,
@@ -52,21 +55,20 @@ index e69f21958c30..d52b00dea5e2 100644
  	struct user_arg_ptr argv = { .ptr.native = __argv };
  	struct user_arg_ptr envp = { .ptr.native = __envp };
 +#ifdef CONFIG_KSU_MANUAL_HOOK
-+	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
-+#endif
++	int retval;
++	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
++
++	retval = __do_execve_file(fd, filename, argv, envp, flags, NULL);
++
++	ksu_handle_post_execveat(&fd, &filename, &argv, &envp, &flags, &retval);
++
++	return retval;
++#else
  	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
++#endif
  }
  
-@@ -1924,6 +1933,9 @@ static int compat_do_execve(struct filename *filename,
- 		.is_compat = true,
- 		.ptr.compat = __envp,
- 	};
-+#ifdef CONFIG_KSU_MANUAL_HOOK // 32-bit ksud and 32-on-64 support
-+	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
-+#endif
- 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
- }
- 
+ int do_execveat(int fd, struct filename *filename,
 diff --git a/fs/open.c b/fs/open.c
 index 0a061ce641f2..264888b95df1 100644
 --- a/fs/open.c
