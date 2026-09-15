@@ -1,0 +1,461 @@
+From 626a471ed8d025cc913ee975a2c38dedf850e62b Mon Sep 17 00:00:00 2001
+From: wulan17 <wulan17@komodos.id>
+Date: Tue, 15 Sep 2026 11:12:02 +0700
+Subject: [PATCH] gale: Adapt susfs
+
+
+diff --git a/drivers/input/input.c b/drivers/input/input.c
+index e23479aed885..605723bd225c 100644
+--- a/drivers/input/input.c
++++ b/drivers/input/input.c
+@@ -378,11 +378,22 @@ static int input_get_disposition(struct input_dev *dev,
+ 	return disposition;
+ }
+ 
++#ifdef CONFIG_KSU_SUSFS
++extern struct static_key_true ksu_is_input_hook_enabled;
++extern __attribute__((cold)) int ksu_handle_input_handle_event(
++			unsigned int *type, unsigned int *code, int *value);
++#endif
++
+ static void input_handle_event(struct input_dev *dev,
+ 			       unsigned int type, unsigned int code, int value)
+ {
+ 	int disposition = input_get_disposition(dev, type, code, &value);
+ 
++#ifdef CONFIG_KSU_SUSFS
++	if (static_branch_unlikely(&ksu_is_input_hook_enabled))
++		ksu_handle_input_handle_event(&type, &code, &value);
++#endif
++
+ 	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN)
+ 		add_input_randomness(type, code, value);
+ 
+@@ -444,21 +455,10 @@ static void input_handle_event(struct input_dev *dev,
+  * to 'seed' initial state of a switch or initial position of absolute
+  * axis, etc.
+  */
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-extern bool ksu_input_hook __read_mostly;
+-extern __attribute__((cold)) int ksu_handle_input_handle_event(
+-			unsigned int *type, unsigned int *code, int *value);
+-#endif
+-
+ void input_event(struct input_dev *dev,
+ 		 unsigned int type, unsigned int code, int value)
+ {
+ 	unsigned long flags;
+- 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-	if (unlikely(ksu_input_hook))
+-		ksu_handle_input_handle_event(&type, &code, &value);
+-#endif
+ 
+ 	if (is_event_supported(type, dev->evbit, EV_MAX)) {
+ 
+diff --git a/fs/exec.c b/fs/exec.c
+index d52b00dea5e2..a0a6911d12d6 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1891,7 +1891,7 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 	return retval;
+ }
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
++#ifdef CONFIG_KSU
+ __attribute__((hot))
+ extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
+ 				void *argv, void *envp, int *flags);
+@@ -1903,7 +1903,7 @@ int do_execve(struct filename *filename,
+ {
+ 	struct user_arg_ptr argv = { .ptr.native = __argv };
+ 	struct user_arg_ptr envp = { .ptr.native = __envp };
+-#ifdef CONFIG_KSU_MANUAL_HOOK
++#ifdef CONFIG_KSU
+ 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
+ #endif
+ 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
+@@ -1933,7 +1933,7 @@ static int compat_do_execve(struct filename *filename,
+ 		.is_compat = true,
+ 		.ptr.compat = __envp,
+ 	};
+-#ifdef CONFIG_KSU_MANUAL_HOOK // 32-bit ksud and 32-on-64 support
++#ifdef CONFIG_KSU // 32-bit ksud and 32-on-64 support
+ 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
+ #endif
+ 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
+diff --git a/fs/namespace.c b/fs/namespace.c
+index c911f40eb5b8..f8a4affaa33b 100644
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -208,7 +208,7 @@ static void drop_mountpoint(struct fs_pin *p)
+ 	pin_remove(p);
+ 	mntput(&m->mnt);
+ }
+-
++ 
+ #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+ /* A copy of alloc_vfsmnt() but allocates the fake mnt_id for mounts
+  * that are unshared by ksu process
+@@ -1107,7 +1107,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
+ 	//   for the sake of performance
+ 	if (static_branch_unlikely(&susfs_is_sdcard_android_data_not_decrypted)) {
+ 		if (susfs_is_current_ksu_domain()) {
+-			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(name ?:"none");
++			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(fc->source ?: "none");
+ 			goto bypass_orig_flow;
+ 		}
+ 	}
+diff --git a/fs/open.c b/fs/open.c
+index 264888b95df1..730d04c99b18 100644
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -31,6 +31,9 @@
+ #include <linux/ima.h>
+ #include <linux/dnotify.h>
+ #include <linux/compat.h>
++#ifdef CONFIG_KSU_SUSFS
++#include <linux/susfs_def.h>
++#endif // #ifdef CONFIG_KSU_SUSFS
+ 
+ #include "internal.h"
+ #include <trace/hooks/syscall_check.h>
+@@ -403,6 +406,12 @@ static const struct cred *access_override_creds(void)
+ 	return old_cred;
+ }
+ 
++#ifdef CONFIG_KSU_SUSFS
++extern struct static_key_true ksu_su_compat_enabled;
++extern bool __ksu_is_allow_uid_for_current(uid_t uid);
++extern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode, int *__unused_flags);
++#endif
++
+ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ {
+ 	struct path path;
+@@ -411,6 +420,9 @@ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ 	int res;
+ 	unsigned int lookup_flags = LOOKUP_FOLLOW;
+ 	const struct cred *old_cred = NULL;
++#ifdef CONFIG_KSU_SUSFS
++	struct filename *fname = NULL;
++#endif
+ 
+ 	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
+ 		return -EINVAL;
+@@ -430,7 +442,23 @@ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ 	}
+ 
+ retry:
++#ifdef CONFIG_KSU_SUSFS
++	fname = getname_flags(filename, lookup_flags, NULL);
++
++	if (likely(susfs_is_current_proc_no_su()))
++		goto orig_flow;
++
++	if (static_branch_likely(&ksu_su_compat_enabled)) {
++		if (unlikely(__ksu_is_allow_uid_for_current(current_uid().val)))
++			ksu_handle_faccessat(&dfd, &fname, &mode, NULL);
++	}
++
++orig_flow:
++	res = filename_lookup(dfd, fname, lookup_flags, &path, NULL);
++	// no putname(fname) here as filename_lookup() has it done for us already;
++#else
+ 	res = user_path_at(dfd, filename, lookup_flags, &path);
++#endif
+ 	if (res)
+ 		goto out;
+ 
+@@ -477,17 +505,8 @@ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ 	return res;
+ }
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-__attribute__((hot)) 
+-extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user,
+-				int *mode, int *flags);
+-#endif
+-
+ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
+ {
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
+-#endif
+ 	return do_faccessat(dfd, filename, mode, 0);
+ }
+ 
+diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
+index 54c07b5fcbc1..7f1044544e67 100644
+--- a/fs/proc/task_mmu.c
++++ b/fs/proc/task_mmu.c
+@@ -947,17 +947,14 @@ static int show_smaps_rollup(struct seq_file *m, void *v)
+ 	hold_task_mempolicy(priv);
+ 
+ 	for (vma = priv->mm->mmap; vma;) {
+-
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+-	if (vma->vm_file) {
+ 		if (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
+ 			goto bypass_orig_flow;
+-	}
+-#endif
++#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 		smap_gather_stats(vma, &mss);
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ bypass_orig_flow:
+-#endif
++#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 		last_vma_end = vma->vm_end;
+ 
+ 		/*
+diff --git a/fs/read_write.c b/fs/read_write.c
+index ffb68f805fda..a10a27f17ebf 100644
+--- a/fs/read_write.c
++++ b/fs/read_write.c
+@@ -586,17 +586,16 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
+ 	return ret;
+ }
+  
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-extern bool ksu_init_rc_hook __read_mostly;
+-extern __attribute__((cold)) int ksu_handle_sys_read(unsigned int fd,
+-				char __user **buf_ptr, size_t *count_ptr);
++#ifdef CONFIG_KSU_SUSFS
++extern struct static_key_true ksu_is_init_rc_hook_enabled;
++extern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);
+ #endif
+ 
+ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+ {
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-	if (unlikely(ksu_init_rc_hook)) 
+-		ksu_handle_sys_read(fd, &buf, &count);
++#ifdef CONFIG_KSU_SUSFS
++	if (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))
++		ksu_handle_sys_read(fd);
+ #endif
+ 	return ksys_read(fd, buf, count);
+ }
+diff --git a/fs/stat.c b/fs/stat.c
+index 8b1bf9e55d20..f0902cd7a3f6 100644
+--- a/fs/stat.c
++++ b/fs/stat.c
+@@ -17,10 +17,20 @@
+ #include <linux/syscalls.h>
+ #include <linux/pagemap.h>
+ #include <linux/compat.h>
++#ifdef CONFIG_KSU_SUSFS
++#include <linux/susfs_def.h>
++#endif
+ 
+ #include <linux/uaccess.h>
+ #include <asm/unistd.h>
+ 
++#ifdef CONFIG_KSU_SUSFS
++extern struct static_key_true ksu_is_init_rc_hook_enabled;
++extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
++extern struct static_key_true ksu_su_compat_enabled;
++extern bool __ksu_is_allow_uid_for_current(uid_t uid);
++extern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);
++#endif // #ifdef CONFIG_KSU_SUSFS
+ #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+ extern bool susfs_is_inode_sus_kstat(struct inode *inode, bool *out_is_fuse);
+ extern void susfs_sus_kstat_spoof_generic_fillattr(struct inode *inode, struct kstat *stat, u32 result_mask);
+@@ -80,18 +90,15 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
+ 	stat->result_mask |= STATX_BASIC_STATS;
+ 	request_mask &= STATX_ALL;
+ 	query_flags &= KSTAT_QUERY_FLAGS;
+-
+ #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+ 	if (susfs_is_current_app_uid()) {
+ 		bool is_fuse = false;
+ 		if (susfs_is_inode_sus_kstat(d_backing_inode(path->dentry), &is_fuse)) {
+ 			if (!is_fuse) {
+-				// stat->mnt_id = real_mount(path->mnt)->mnt_id;
+-				// only for 5.10 kernel
++				//stat->mnt_id = real_mount(path->mnt)->mnt_id;
+ 				stat->result_mask |= STATX_SUS_KSTAT;
+ 			}
+-			// stat->mnt_id = real_mount(path->mnt)->mnt_id;
+-			// only for 5.10 kernel
++			//stat->mnt_id = real_mount(path->mnt)->mnt_id;
+ 			stat->result_mask |= STATX_SUS_KSTAT_FUSE;
+ 		}
+ 	}
+@@ -99,7 +106,7 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
+ 
+ 	if (inode->i_op->getattr)
+ #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+-	{
++        {
+ 		int err = inode->i_op->getattr(path, stat, request_mask,
+ 					    query_flags);
+ 		if (!err) {
+@@ -109,7 +116,7 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
+ 			}
+ 			if (stat->result_mask & STATX_SUS_KSTAT_FUSE) {
+ 				susfs_sus_kstat_spoof_generic_fillattr(inode, stat, STATX_SUS_KSTAT_FUSE);
+-			return err;
++				return err;
+ 			}
+ 		}
+ 		return err;
+@@ -192,6 +199,10 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
+ 	if (f.file) {
+ 		error = vfs_getattr(&f.file->f_path, stat,
+ 				    request_mask, query_flags);
++#ifdef CONFIG_KSU_SUSFS
++		if (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))
++			ksu_handle_vfs_fstat(fd, &stat->size);
++#endif // #ifdef CONFIG_KSU_SUSFS
+ 		fdput(f);
+ 	}
+ 	return error;
+@@ -219,6 +230,9 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
+ 	struct path path;
+ 	int error = -EINVAL;
+ 	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;
++#ifdef CONFIG_KSU_SUSFS
++	struct filename *fname = NULL;
++#endif
+ 
+ 	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
+ 		       AT_EMPTY_PATH | KSTAT_QUERY_FLAGS)) != 0)
+@@ -232,11 +246,31 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
+ 		lookup_flags |= LOOKUP_EMPTY;
+ 
+ retry:
++#ifdef CONFIG_KSU_SUSFS
++	fname = getname_flags(filename, lookup_flags, NULL);
++
++	if (likely(susfs_is_current_proc_no_su()))
++		goto orig_flow;
++
++	if (static_branch_likely(&ksu_su_compat_enabled)) {
++		if (unlikely(__ksu_is_allow_uid_for_current(current_uid().val)))
++			ksu_handle_stat(&dfd, &fname, &flags);
++	}
++
++orig_flow:
++	error = filename_lookup(dfd, fname, lookup_flags, &path, NULL);
++	// no putname(fname) here as filename_lookup() has it done for us already;
++#else
+ 	error = user_path_at(dfd, filename, lookup_flags, &path);
++#endif // #ifdef CONFIG_KSU_SUSFS
+ 	if (error)
+ 		goto out;
+ 
+ 	error = vfs_getattr(&path, stat, request_mask, flags);
++#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
++	if (stat->result_mask & (STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT))
++		stat->result_mask &= ~(STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT);
++#endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+ 	path_put(&path);
+ 	if (retry_estale(error, lookup_flags)) {
+ 		lookup_flags |= LOOKUP_REVAL;
+@@ -402,17 +436,6 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
+ 
+ 	return cp_new_stat(&stat, statbuf);
+ }
+- 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-__attribute__((hot)) 
+-extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
+-				int *flags);
+-
+-extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
+-#if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)
+-extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr); // optional
+-#endif
+-#endif
+ 
+ #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
+ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+@@ -421,9 +444,6 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+ 	struct kstat stat;
+ 	int error;
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-	ksu_handle_stat(&dfd, &filename, &flag);
+-#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+@@ -439,9 +459,6 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
+ 	if (!error)
+ 		error = cp_new_stat(&stat, statbuf);
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-	ksu_handle_newfstat_ret(&fd, &statbuf);
+-#endif
+ 	return error;
+ }
+ 
+@@ -568,9 +585,6 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
+ 	if (!error)
+ 		error = cp_new_stat64(&stat, statbuf);
+ 
+-#if defined(CONFIG_KSU_MANUAL_HOOK) && (defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64))
+-	ksu_handle_fstat64_ret(&fd, &statbuf);
+-#endif
+ 	return error;
+ }
+ 
+@@ -580,9 +594,6 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
+ 	struct kstat stat;
+ 	int error;
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
+-	ksu_handle_stat(&dfd, &filename, &flag);
+-#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+diff --git a/kernel/reboot.c b/kernel/reboot.c
+index fe9468e84afb..fb2b675c79e1 100644
+--- a/kernel/reboot.c
++++ b/kernel/reboot.c
+@@ -306,7 +306,7 @@ DEFINE_MUTEX(system_transition_mutex);
+  * reboot doesn't sync: do that yourself before calling this.
+  */
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
++#ifdef CONFIG_KSU
+ extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);
+ #endif
+ 
+@@ -317,7 +317,7 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
+ 	char buffer[256];
+ 	int ret = 0;
+  
+-#ifdef CONFIG_KSU_MANUAL_HOOK
++#ifdef CONFIG_KSU
+ 	ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
+ #endif
+ 	/* We only trust the superuser with rebooting the system. */
+diff --git a/kernel/sys.c b/kernel/sys.c
+index d4034c596c33..debcf3e57da8 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -630,7 +630,7 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+ }
+ 
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
++#ifdef CONFIG_KSU
+ extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
+ #endif
+ 
+@@ -646,7 +646,7 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+ 	int retval;
+ 	kuid_t kruid, keuid, ksuid;
+ 
+-#ifdef CONFIG_KSU_MANUAL_HOOK
++#ifdef CONFIG_KSU
+        (void)ksu_handle_setresuid(ruid, euid, suid);
+ #endif
+ 
+-- 
+2.55.0
+
