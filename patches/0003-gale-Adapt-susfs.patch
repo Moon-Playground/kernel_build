@@ -1,4 +1,4 @@
-From 9dd82dca9c83b9e144677764290fb1937862e2a3 Mon Sep 17 00:00:00 2001
+From 6d43e0eb7378b14b772ad27591aa39e0293dc34c Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Tue, 15 Sep 2026 11:12:02 +0700
 Subject: [PATCH] gale: Adapt susfs
@@ -54,36 +54,36 @@ index e23479aed885..605723bd225c 100644
  	if (is_event_supported(type, dev->evbit, EV_MAX)) {
  
 diff --git a/fs/exec.c b/fs/exec.c
-index d52b00dea5e2..a0a6911d12d6 100644
+index 9572bcc6bfdb..8368909981d2 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -1891,7 +1891,7 @@ static int do_execveat_common(int fd, struct filename *filename,
- 	return retval;
- }
- 
+@@ -1728,7 +1728,7 @@ static int exec_binprm(struct linux_binprm *bprm)
+ /*
+  * sys_execve() executes a new program.
+  */
 -#ifdef CONFIG_KSU_MANUAL_HOOK
 +#ifdef CONFIG_KSU
  __attribute__((hot))
  extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
  				void *argv, void *envp, int *flags);
-@@ -1903,7 +1903,7 @@ int do_execve(struct filename *filename,
- {
- 	struct user_arg_ptr argv = { .ptr.native = __argv };
- 	struct user_arg_ptr envp = { .ptr.native = __envp };
+@@ -1748,7 +1748,7 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 	struct files_struct *displaced;
+ 	int retval;
+ 
 -#ifdef CONFIG_KSU_MANUAL_HOOK
 +#ifdef CONFIG_KSU
- 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
+ 	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
  #endif
- 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
-@@ -1933,7 +1933,7 @@ static int compat_do_execve(struct filename *filename,
- 		.is_compat = true,
- 		.ptr.compat = __envp,
- 	};
--#ifdef CONFIG_KSU_MANUAL_HOOK // 32-bit ksud and 32-on-64 support
-+#ifdef CONFIG_KSU // 32-bit ksud and 32-on-64 support
- 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
+ 
+@@ -1901,7 +1901,7 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 		reset_files_struct(displaced);
+ out_ret:
+ 	putname(filename);
+-#ifdef CONFIG_KSU_MANUAL_HOOK
++#ifdef CONFIG_KSU
+ 	ksu_handle_post_execveat(&fd, &filename, &argv, &envp, &flags, &retval);
  #endif
- 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
+ 	return retval;
 diff --git a/fs/namespace.c b/fs/namespace.c
 index c911f40eb5b8..f8a4affaa33b 100644
 --- a/fs/namespace.c

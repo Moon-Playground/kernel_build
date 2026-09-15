@@ -1,4 +1,4 @@
-From f4bab0a49c1c9680195efdb524925ea7400fbbe9 Mon Sep 17 00:00:00 2001
+From f84042e10bf95666bd38fbc514cc5772a855427d Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Wed, 15 Jul 2026 19:22:04 +0700
 Subject: [PATCH] gale: ReSukiSU manual hook
@@ -32,39 +32,44 @@ index 70ffffea3e58..e23479aed885 100644
  	if (is_event_supported(type, dev->evbit, EV_MAX)) {
  
 diff --git a/fs/exec.c b/fs/exec.c
-index e69f21958c30..d52b00dea5e2 100644
+index e69f21958c30..9572bcc6bfdb 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -1891,12 +1891,21 @@ static int do_execveat_common(int fd, struct filename *filename,
- 	return retval;
- }
- 
+@@ -1728,6 +1728,15 @@ static int exec_binprm(struct linux_binprm *bprm)
+ /*
+  * sys_execve() executes a new program.
+  */
 +#ifdef CONFIG_KSU_MANUAL_HOOK
 +__attribute__((hot))
 +extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
 +				void *argv, void *envp, int *flags);
++__attribute__((hot))
++extern int ksu_handle_post_execveat(int *fd, struct filename **filename_ptr,
++				void *argv, void *envp, int *flags, int *retval);
 +#endif
 +
- int do_execve(struct filename *filename,
- 	const char __user *const __user *__argv,
- 	const char __user *const __user *__envp)
- {
- 	struct user_arg_ptr argv = { .ptr.native = __argv };
- 	struct user_arg_ptr envp = { .ptr.native = __envp };
-+#ifdef CONFIG_KSU_MANUAL_HOOK
-+	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
-+#endif
- 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
- }
+ static int do_execveat_common(int fd, struct filename *filename,
+ 			      struct user_arg_ptr argv,
+ 			      struct user_arg_ptr envp,
+@@ -1739,6 +1748,10 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 	struct files_struct *displaced;
+ 	int retval;
  
-@@ -1924,6 +1933,9 @@ static int compat_do_execve(struct filename *filename,
- 		.is_compat = true,
- 		.ptr.compat = __envp,
- 	};
-+#ifdef CONFIG_KSU_MANUAL_HOOK // 32-bit ksud and 32-on-64 support
-+	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
 +#endif
- 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
++
+ 	if (IS_ERR(filename))
+ 		return PTR_ERR(filename);
+ 
+@@ -1888,6 +1901,9 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 		reset_files_struct(displaced);
+ out_ret:
+ 	putname(filename);
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_post_execveat(&fd, &filename, &argv, &envp, &flags, &retval);
++#endif
+ 	return retval;
  }
  
 diff --git a/fs/open.c b/fs/open.c
