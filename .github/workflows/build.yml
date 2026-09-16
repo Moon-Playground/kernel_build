@@ -46,7 +46,7 @@ jobs:
         spoof: [false, true]
     steps:
       - name: Checkout script
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -57,7 +57,7 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Clone kernel
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.kernel_repo }}
           path: kernel
@@ -103,14 +103,14 @@ jobs:
         run: bash build.sh anykernel
 
       - name: Upload vmlinux
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.build_type }}-vmlinux${{ matrix.spoof == true && '-spoof' || '' }}
           path: out/vmlinux
 
       - name: Upload logs
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.build_type }}-build-logs${{ matrix.spoof == true && '-spoof' || '' }}
           path: Logs/
