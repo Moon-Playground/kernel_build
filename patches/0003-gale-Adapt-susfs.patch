@@ -1,4 +1,4 @@
-From 6d43e0eb7378b14b772ad27591aa39e0293dc34c Mon Sep 17 00:00:00 2001
+From a16a30d58c895afe8091319ce6b122ef982c9fab Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Tue, 15 Sep 2026 11:12:02 +0700
 Subject: [PATCH] gale: Adapt susfs
@@ -85,7 +85,7 @@ index 9572bcc6bfdb..8368909981d2 100644
  #endif
  	return retval;
 diff --git a/fs/namespace.c b/fs/namespace.c
-index c911f40eb5b8..f8a4affaa33b 100644
+index 302f16914ed0..81b9a6855d02 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -208,7 +208,7 @@ static void drop_mountpoint(struct fs_pin *p)
@@ -101,7 +101,7 @@ index c911f40eb5b8..f8a4affaa33b 100644
  	//   for the sake of performance
  	if (static_branch_unlikely(&susfs_is_sdcard_android_data_not_decrypted)) {
  		if (susfs_is_current_ksu_domain()) {
--			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(name ?:"none");
+-			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(name ?: "none");
 +			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(fc->source ?: "none");
  			goto bypass_orig_flow;
  		}
@@ -185,30 +185,6 @@ index 264888b95df1..730d04c99b18 100644
  	return do_faccessat(dfd, filename, mode, 0);
  }
  
-diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
-index 54c07b5fcbc1..6e62846879c7 100644
---- a/fs/proc/task_mmu.c
-+++ b/fs/proc/task_mmu.c
-@@ -947,17 +947,16 @@ static int show_smaps_rollup(struct seq_file *m, void *v)
- 	hold_task_mempolicy(priv);
- 
- 	for (vma = priv->mm->mmap; vma;) {
--
- #ifdef CONFIG_KSU_SUSFS_SUS_MAP
- 	if (vma->vm_file) {
- 		if (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
- 			goto bypass_orig_flow;
- 	}
--#endif
-+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
- 		smap_gather_stats(vma, &mss);
- #ifdef CONFIG_KSU_SUSFS_SUS_MAP
- bypass_orig_flow:
--#endif
-+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
- 		last_vma_end = vma->vm_end;
- 
- 		/*
 diff --git a/fs/read_write.c b/fs/read_write.c
 index ffb68f805fda..a10a27f17ebf 100644
 --- a/fs/read_write.c
