@@ -1,0 +1,110 @@
+From bc1ff1127826639e18881a4475e0a77488de2d8d Mon Sep 17 00:00:00 2001
+From: Thomas Turner <thomas_turner@talktalk.net>
+Date: Thu, 17 Jul 2025 19:17:00 +0100
+Subject: [PATCH] uname: Add support for fake uname
+
+To make this patch more maintainable we will add
+support from 5.4 all the way to 6.12, and also
+enable 6.12 since the chain above adds support
+for it.
+
+Change-Id: If7d2628ab19bc67ef360b944cd9230d5efd7136a
+
+newuname: only spoof for root
+
+* This is a detection point.
+
+Co-authored-by: backslashxx <118538522+backslashxx@users.noreply.github.com>
+Change-Id: Id38998e10025d3782ebc76cceeeece401e12211f
+Signed-off-by: rsuntk <rissu.ntk@gmail.com>
+
+diff --git a/init/Kconfig b/init/Kconfig
+index 74d4b70195f0..b0e66cf8ecfb 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -52,6 +52,37 @@ config CC_CAN_LINK_STATIC
+ 	default $(success,$(srctree)/scripts/cc-can-link.sh $(CC) -static $(m64-flag)) if 64BIT
+ 	default $(success,$(srctree)/scripts/cc-can-link.sh $(CC) -static $(m32-flag))
+ 
++choice
++    prompt "Fake uname kernel version"
++    default FAKE_UNAME_NONE
++    help
++      Kernel side spoof for BPF.
++
++config FAKE_UNAME_NONE
++    bool "None"
++    help
++      Don't spoof uname version.
++
++config FAKE_UNAME_5_4
++    bool "5.4"
++
++config FAKE_UNAME_5_10
++    bool "5.10"
++
++config FAKE_UNAME_5_15
++    bool "5.15"
++
++config FAKE_UNAME_6_1
++	bool "6.1"
++
++config FAKE_UNAME_6_6
++	bool "6.6"
++
++config FAKE_UNAME_6_12
++	bool "6.12"
++
++endchoice
++
+ config CC_HAS_ASM_GOTO
+ 	def_bool $(success,$(srctree)/scripts/gcc-goto.sh $(CC))
+ 
+diff --git a/kernel/sys.c b/kernel/sys.c
+index 367897d3c835..198d7591834d 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -1248,12 +1248,40 @@ static int override_release(char __user *release, size_t len)
+ 	return ret;
+ }
+ 
++#ifndef CONFIG_FAKE_UNAME_NONE
++#if defined(CONFIG_FAKE_UNAME_5_4)
++#define FAKE_UNAME "5.4.296"
++#elif defined(CONFIG_FAKE_UNAME_5_10)
++#define FAKE_UNAME "5.10.241"
++#elif defined(CONFIG_FAKE_UNAME_5_15)
++#define FAKE_UNAME "5.15.190"
++#elif defined(CONFIG_FAKE_UNAME_6_1)
++#define FAKE_UNAME "6.1.149"
++#elif defined(CONFIG_FAKE_UNAME_6_6)
++#define FAKE_UNAME "6.6.103"
++#elif defined(CONFIG_FAKE_UNAME_6_12)
++#define FAKE_UNAME "6.12.44"
++#endif
++#endif
++
+ SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
+ {
+ 	struct new_utsname tmp;
+ 
+ 	down_read(&uts_sem);
+ 	memcpy(&tmp, utsname(), sizeof(tmp));
++#ifndef CONFIG_FAKE_UNAME_NONE
++	if (current_uid().val == 0) {
++		if (!strncmp(current->comm, "bpfloader", 9) ||
++			!strncmp(current->comm, "netbpfload", 10) ||
++			!strncmp(current->comm, "netd", 4) ||
++			!strncmp(current->comm, "uprobestats", 11)) {
++			strcpy(tmp.release, FAKE_UNAME);
++			pr_info("fake uname: %s/%d release=%s\n",
++				current->comm, current->pid, tmp.release);
++		}
++	}
++#endif
+ 	up_read(&uts_sem);
+ 	if (copy_to_user(name, &tmp, sizeof(tmp)))
+ 		return -EFAULT;
+-- 
+2.55.0
+

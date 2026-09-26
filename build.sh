@@ -81,7 +81,12 @@ function do_patches(){
 	fi
 
 	if [[ "$SPOOF" == "True" || "$SPOOF" == "true" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0002-kernel-Fake-uname-to-5.10.239.patch || { echo "Patch application failed!"; exit 1; }
+		if [[ "$B_TYPE" == "susfs" ]]; then
+			git -C kernel am --3way "$BASE_DIR"/patches/susfs-uname-Add-support-for-fake-uname.patch || { echo "Patch application failed!"; exit 1; }
+		else
+			git -C kernel am --3way "$BASE_DIR"/patches/uname-Add-support-for-fake-uname.patch || { echo "Patch application failed!"; exit 1; }
+		fi
+		echo "CONFIG_FAKE_UNAME_5_10=y" >> "$BASE_DIR"/kernel/arch/"$ARCH"/configs/"$KERN_DEFCONFIG"
 	fi
 }
 

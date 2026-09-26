@@ -1,4 +1,4 @@
-From a16a30d58c895afe8091319ce6b122ef982c9fab Mon Sep 17 00:00:00 2001
+From 7511c73b2e930a77d69b43d8da18361f4034cf70 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Tue, 15 Sep 2026 11:12:02 +0700
 Subject: [PATCH] gale: Adapt susfs
@@ -54,7 +54,7 @@ index e23479aed885..605723bd225c 100644
  	if (is_event_supported(type, dev->evbit, EV_MAX)) {
  
 diff --git a/fs/exec.c b/fs/exec.c
-index 9572bcc6bfdb..8368909981d2 100644
+index 7269f1924ba0..1051639d4939 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -1728,7 +1728,7 @@ static int exec_binprm(struct linux_binprm *bprm)
@@ -66,7 +66,7 @@ index 9572bcc6bfdb..8368909981d2 100644
  __attribute__((hot))
  extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
  				void *argv, void *envp, int *flags);
-@@ -1748,7 +1748,7 @@ static int do_execveat_common(int fd, struct filename *filename,
+@@ -1747,7 +1747,7 @@ static int __do_execve_file(int fd, struct filename *filename,
  	struct files_struct *displaced;
  	int retval;
  
@@ -75,10 +75,10 @@ index 9572bcc6bfdb..8368909981d2 100644
  	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
  #endif
  
-@@ -1901,7 +1901,7 @@ static int do_execveat_common(int fd, struct filename *filename,
- 		reset_files_struct(displaced);
+@@ -1905,7 +1905,7 @@ static int __do_execve_file(int fd, struct filename *filename,
  out_ret:
- 	putname(filename);
+ 	if (filename)
+ 		putname(filename);
 -#ifdef CONFIG_KSU_MANUAL_HOOK
 +#ifdef CONFIG_KSU
  	ksu_handle_post_execveat(&fd, &filename, &argv, &envp, &flags, &retval);
@@ -107,7 +107,7 @@ index 302f16914ed0..81b9a6855d02 100644
  		}
  	}
 diff --git a/fs/open.c b/fs/open.c
-index 264888b95df1..730d04c99b18 100644
+index d204816902c0..960ab9717bfa 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -31,6 +31,9 @@
@@ -120,32 +120,33 @@ index 264888b95df1..730d04c99b18 100644
  
  #include "internal.h"
  #include <trace/hooks/syscall_check.h>
-@@ -403,6 +406,12 @@ static const struct cred *access_override_creds(void)
- 	return old_cred;
- }
- 
+@@ -345,6 +348,13 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
+  * We do this by temporarily clearing all FS-related capabilities and
+  * switching the fsuid/fsgid around to the real ones.
+  */
++
 +#ifdef CONFIG_KSU_SUSFS
 +extern struct static_key_true ksu_su_compat_enabled;
 +extern bool __ksu_is_allow_uid_for_current(uid_t uid);
 +extern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode, int *__unused_flags);
 +#endif
 +
- long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ long do_faccessat(int dfd, const char __user *filename, int mode)
  {
- 	struct path path;
-@@ -411,6 +420,9 @@ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ 	const struct cred *old_cred;
+@@ -353,6 +363,9 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
+ 	struct inode *inode;
  	int res;
  	unsigned int lookup_flags = LOOKUP_FOLLOW;
- 	const struct cred *old_cred = NULL;
 +#ifdef CONFIG_KSU_SUSFS
 +	struct filename *fname = NULL;
 +#endif
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -430,7 +442,23 @@ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
- 	}
+@@ -395,7 +408,23 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
  
+ 	old_cred = override_creds(override_cred);
  retry:
 +#ifdef CONFIG_KSU_SUSFS
 +	fname = getname_flags(filename, lookup_flags, NULL);
@@ -167,7 +168,7 @@ index 264888b95df1..730d04c99b18 100644
  	if (res)
  		goto out;
  
-@@ -477,17 +505,8 @@ long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+@@ -440,17 +469,8 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
  	return res;
  }
  
@@ -182,7 +183,7 @@ index 264888b95df1..730d04c99b18 100644
 -#ifdef CONFIG_KSU_MANUAL_HOOK
 -	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 -#endif
- 	return do_faccessat(dfd, filename, mode, 0);
+ 	return do_faccessat(dfd, filename, mode);
  }
  
 diff --git a/fs/read_write.c b/fs/read_write.c
@@ -391,10 +392,10 @@ index fe9468e84afb..fb2b675c79e1 100644
  #endif
  	/* We only trust the superuser with rebooting the system. */
 diff --git a/kernel/sys.c b/kernel/sys.c
-index d4034c596c33..debcf3e57da8 100644
+index fca927052656..63974ae1bca7 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
-@@ -630,7 +630,7 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+@@ -619,7 +619,7 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
  }
  
  
@@ -403,7 +404,7 @@ index d4034c596c33..debcf3e57da8 100644
  extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
  #endif
  
-@@ -646,7 +646,7 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+@@ -635,7 +635,7 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
  	int retval;
  	kuid_t kruid, keuid, ksuid;
  

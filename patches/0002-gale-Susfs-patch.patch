@@ -1,16 +1,16 @@
-From a71d562eda328b41f3a2d172d986717aca17d9fa Mon Sep 17 00:00:00 2001
+From d83bdb721505b869a3b8291fee6f3b3baaa14c07 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Sat, 19 Sep 2026 00:29:14 +0700
 Subject: [PATCH] gale: Susfs patch
 
 
 diff --git a/fs/Makefile b/fs/Makefile
-index 5fb52a8dd14e..eb1518ad40ea 100644
+index dac506e9a643..402abef69261 100644
 --- a/fs/Makefile
 +++ b/fs/Makefile
 @@ -15,6 +15,8 @@ obj-y :=	open.o read_write.o file_table.o super.o \
  		stack.o fs_struct.o statfs.o fs_pin.o nsfs.o \
- 		fs_context.o fs_parser.o fs_types.o
+ 		fs_context.o fs_parser.o
  
 +obj-$(CONFIG_KSU_SUSFS) += susfs.o
 +
@@ -18,7 +18,7 @@ index 5fb52a8dd14e..eb1518ad40ea 100644
  obj-y +=	buffer.o block_dev.o direct-io.o mpage.o
  else
 diff --git a/fs/namei.c b/fs/namei.c
-index ef741e36acf6..914dd4dacaa8 100644
+index 148254134547..37a670de39bf 100644
 --- a/fs/namei.c
 +++ b/fs/namei.c
 @@ -40,6 +40,9 @@
@@ -46,7 +46,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  /* [Feb-1997 T. Schoebel-Theuer]
   * Fundamental changes in the pathname lookup mechanisms (namei)
   * were necessary because of omirr.  The reason is that omirr needs
-@@ -506,6 +517,9 @@ struct nameidata {
+@@ -496,6 +507,9 @@ struct nameidata {
  	struct path	root;
  	struct inode	*inode; /* path.dentry.d_inode */
  	unsigned int	flags;
@@ -56,7 +56,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	unsigned	seq, m_seq;
  	int		last_type;
  	unsigned	depth;
-@@ -532,6 +546,9 @@ static void set_nameidata(struct nameidata *p, int dfd, struct filename *name)
+@@ -522,6 +536,9 @@ static void set_nameidata(struct nameidata *p, int dfd, struct filename *name)
  	p->total_link_count = old ? old->total_link_count : 0;
  	p->saved = old;
  	current->nameidata = p;
@@ -66,7 +66,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  }
  
  static void restore_nameidata(void)
-@@ -1610,6 +1627,14 @@ static struct dentry *lookup_dcache(const struct qstr *name,
+@@ -1600,6 +1617,14 @@ static struct dentry *lookup_dcache(const struct qstr *name,
  			return ERR_PTR(error);
  		}
  	}
@@ -81,7 +81,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	return dentry;
  }
  
-@@ -1627,14 +1652,27 @@ static struct dentry *__lookup_hash(const struct qstr *name,
+@@ -1617,14 +1642,27 @@ static struct dentry *__lookup_hash(const struct qstr *name,
  	struct dentry *old;
  	struct inode *dir = base->d_inode;
  
@@ -110,7 +110,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	if (unlikely(!dentry))
  		return ERR_PTR(-ENOMEM);
  
-@@ -1643,6 +1681,26 @@ static struct dentry *__lookup_hash(const struct qstr *name,
+@@ -1633,6 +1671,26 @@ static struct dentry *__lookup_hash(const struct qstr *name,
  		dput(dentry);
  		dentry = old;
  	}
@@ -137,7 +137,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	return dentry;
  }
  
-@@ -1653,6 +1711,9 @@ static int lookup_fast(struct nameidata *nd,
+@@ -1643,6 +1701,9 @@ static int lookup_fast(struct nameidata *nd,
  	struct vfsmount *mnt = nd->path.mnt;
  	struct dentry *dentry, *parent = nd->path.dentry;
  	int status = 1;
@@ -147,7 +147,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	int err;
  
  	/*
-@@ -1664,6 +1725,16 @@ static int lookup_fast(struct nameidata *nd,
+@@ -1654,6 +1715,16 @@ static int lookup_fast(struct nameidata *nd,
  		unsigned seq;
  		bool negative;
  		dentry = __d_lookup_rcu(parent, &nd->last, &seq);
@@ -164,7 +164,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  		if (unlikely(!dentry)) {
  			if (unlazy_walk(nd))
  				return -ECHILD;
-@@ -1710,6 +1781,16 @@ static int lookup_fast(struct nameidata *nd,
+@@ -1700,6 +1771,16 @@ static int lookup_fast(struct nameidata *nd,
  			status = d_revalidate(dentry, nd->flags);
  	} else {
  		dentry = __d_lookup(parent, &nd->last);
@@ -181,7 +181,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  		if (unlikely(!dentry))
  			return 0;
  		status = d_revalidate(dentry, nd->flags);
-@@ -1741,12 +1822,19 @@ static struct dentry *__lookup_slow(const struct qstr *name,
+@@ -1731,12 +1812,19 @@ static struct dentry *__lookup_slow(const struct qstr *name,
  	struct dentry *dentry, *old;
  	struct inode *inode = dir->d_inode;
  	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
@@ -201,7 +201,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	if (IS_ERR(dentry))
  		return dentry;
  	if (unlikely(!d_in_lookup(dentry))) {
-@@ -1756,6 +1844,12 @@ static struct dentry *__lookup_slow(const struct qstr *name,
+@@ -1746,6 +1834,12 @@ static struct dentry *__lookup_slow(const struct qstr *name,
  				if (!error) {
  					d_invalidate(dentry);
  					dput(dentry);
@@ -214,7 +214,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  					goto again;
  				}
  				dput(dentry);
-@@ -1770,6 +1864,19 @@ static struct dentry *__lookup_slow(const struct qstr *name,
+@@ -1760,6 +1854,19 @@ static struct dentry *__lookup_slow(const struct qstr *name,
  			dentry = old;
  		}
  	}
@@ -234,7 +234,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	return dentry;
  }
  
-@@ -1902,6 +2009,11 @@ static int walk_component(struct nameidata *nd, int flags)
+@@ -1892,6 +1999,11 @@ static int walk_component(struct nameidata *nd, int flags)
  	if (unlikely(err <= 0)) {
  		if (err < 0)
  			return err;
@@ -246,7 +246,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  		path.dentry = lookup_slow(&nd->last, nd->path.dentry,
  					  nd->flags);
  		if (IS_ERR(path.dentry))
-@@ -2180,6 +2292,17 @@ static int link_path_walk(const char *name, struct nameidata *nd)
+@@ -2170,6 +2282,17 @@ static int link_path_walk(const char *name, struct nameidata *nd)
  		if (err)
  			return err;
  
@@ -264,7 +264,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  		hash_len = hash_name(nd->path.dentry, name);
  
  		type = LAST_NORM;
-@@ -2363,6 +2486,9 @@ static inline int lookup_last(struct nameidata *nd)
+@@ -2353,6 +2476,9 @@ static inline int lookup_last(struct nameidata *nd)
  {
  	if (nd->last_type == LAST_NORM && nd->last.name[nd->last.len])
  		nd->flags |= LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
@@ -274,7 +274,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  
  	nd->flags &= ~LOOKUP_PARENT;
  	return walk_component(nd, 0);
-@@ -3274,15 +3400,39 @@ static int lookup_open(struct nameidata *nd, struct path *path,
+@@ -3241,15 +3367,39 @@ static int lookup_open(struct nameidata *nd, struct path *path,
  	int error, create_error = 0;
  	umode_t mode = op->mode;
  	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
@@ -314,7 +314,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  			if (IS_ERR(dentry))
  				return PTR_ERR(dentry);
  		}
-@@ -3407,6 +3557,10 @@ static int do_last(struct nameidata *nd,
+@@ -3374,6 +3524,10 @@ static int do_last(struct nameidata *nd,
  	struct path path;
  	int error;
  
@@ -325,7 +325,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	nd->flags &= ~LOOKUP_PARENT;
  	nd->flags |= op->intent;
  
-@@ -3618,9 +3772,30 @@ static int do_tmpfile(struct nameidata *nd, unsigned flags,
+@@ -3584,9 +3738,30 @@ static int do_tmpfile(struct nameidata *nd, unsigned flags,
  		const struct open_flags *op,
  		struct file *file)
  {
@@ -356,7 +356,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	if (unlikely(error))
  		return error;
  	error = mnt_want_write(path.mnt);
-@@ -3648,9 +3823,30 @@ static int do_tmpfile(struct nameidata *nd, unsigned flags,
+@@ -3614,9 +3789,30 @@ static int do_tmpfile(struct nameidata *nd, unsigned flags,
  
  static int do_o_path(struct nameidata *nd, unsigned flags, struct file *file)
  {
@@ -387,7 +387,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  		audit_inode(nd->name, path.dentry, 0);
  		error = vfs_open(&path, file);
  		path_put(&path);
-@@ -3661,6 +3857,11 @@ static int do_o_path(struct nameidata *nd, unsigned flags, struct file *file)
+@@ -3627,6 +3823,11 @@ static int do_o_path(struct nameidata *nd, unsigned flags, struct file *file)
  static struct file *path_openat(struct nameidata *nd,
  			const struct open_flags *op, unsigned flags)
  {
@@ -399,7 +399,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	struct file *file;
  	int error;
  
-@@ -3679,8 +3880,33 @@ static struct file *path_openat(struct nameidata *nd,
+@@ -3645,8 +3846,33 @@ static struct file *path_openat(struct nameidata *nd,
  			nd->flags &= ~(LOOKUP_OPEN|LOOKUP_CREATE|LOOKUP_EXCL);
  			s = trailing_symlink(nd);
  		}
@@ -433,7 +433,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  	if (likely(!error)) {
  		if (likely(file->f_mode & FMODE_OPENED))
  			return file;
-@@ -3697,6 +3923,10 @@ static struct file *path_openat(struct nameidata *nd,
+@@ -3663,6 +3889,10 @@ static struct file *path_openat(struct nameidata *nd,
  	return ERR_PTR(error);
  }
  
@@ -444,7 +444,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  struct file *do_filp_open(int dfd, struct filename *pathname,
  		const struct open_flags *op)
  {
-@@ -4909,7 +5139,18 @@ int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
+@@ -4830,7 +5060,18 @@ int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
  
  	if (unlikely(!(inode->i_opflags & IOP_DEFAULT_READLINK))) {
  		if (unlikely(inode->i_op->readlink))
@@ -463,7 +463,7 @@ index ef741e36acf6..914dd4dacaa8 100644
  
  		if (!d_is_symlink(dentry))
  			return -EINVAL;
-@@ -4925,6 +5166,15 @@ int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
+@@ -4846,6 +5087,15 @@ int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
  		if (IS_ERR(link))
  			return PTR_ERR(link);
  	}
@@ -933,7 +933,7 @@ index 74aeabbf0ea4..2d0674ee9850 100644
  			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
  			   inotify_mark_user_mask(mark));
 diff --git a/fs/proc/base.c b/fs/proc/base.c
-index cedd61a6c4a5..5435080bc676 100644
+index 86e4d5fd2884..7127ebba9b18 100644
 --- a/fs/proc/base.c
 +++ b/fs/proc/base.c
 @@ -95,6 +95,9 @@
@@ -2027,7 +2027,7 @@ index 29786598c2b5..6f829e19d477 100644
  	error = statfs_by_dentry(path->dentry, buf);
  	if (!error)
 diff --git a/fs/super.c b/fs/super.c
-index 4149d13d3002..cc31695d06c7 100644
+index 9d9a14c385d0..ea1685edf97e 100644
 --- a/fs/super.c
 +++ b/fs/super.c
 @@ -37,8 +37,16 @@
@@ -2047,7 +2047,7 @@ index 4149d13d3002..cc31695d06c7 100644
  static int thaw_super_locked(struct super_block *sb);
  
  static LIST_HEAD(super_blocks);
-@@ -1115,6 +1123,22 @@ int get_anon_bdev(dev_t *p)
+@@ -1104,6 +1112,22 @@ int get_anon_bdev(dev_t *p)
  {
  	int dev;
  
@@ -4170,10 +4170,10 @@ index dfbdb3f344d0..043a3cff8e0d 100644
  }
  
 diff --git a/kernel/sys.c b/kernel/sys.c
-index 33b1e540fdba..d4034c596c33 100644
+index 367897d3c835..fca927052656 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
-@@ -1259,12 +1259,20 @@ static int override_release(char __user *release, size_t len)
+@@ -1248,12 +1248,20 @@ static int override_release(char __user *release, size_t len)
  	return ret;
  }
  
@@ -4232,7 +4232,7 @@ index 428a297110e9..ff7a3cbb05ed 100644
  				gup_flags, &page, &vma, NULL);
  		if (ret <= 0) {
 diff --git a/security/selinux/avc.c b/security/selinux/avc.c
-index 70abbfbe6d93..b7b8c3a79135 100644
+index f1843226e906..a8f005932dc1 100644
 --- a/security/selinux/avc.c
 +++ b/security/selinux/avc.c
 @@ -164,6 +164,11 @@ static void avc_dump_av(struct audit_buffer *ab, u16 tclass, u32 av)
