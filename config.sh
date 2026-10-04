@@ -9,7 +9,7 @@ export SHIP_DTBO=0 # Set to 1 to ship dtbo.img, 0 to not ship
 ## Notes:
 # this script running in aarch64 workflows
 # so only use clang for aarch64
-export CLANG_URL="https://github.com/MayuriLabs/tc/releases/download/22.0.0git-29639420459/Mayuri-clang_22.0.0git-bookworm-aarch64-de03d4304.tar.xz"
+export CLANG_URL="https://github.com/MayuriLabs/tc/releases/download/23.0.0git-37041309404/Mayuri-clang_23.0.0git-trixie-aarch64-52d25c7f6.tar.xz"
 
 export CORES=$(nproc --all)
 
