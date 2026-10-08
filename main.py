@@ -61,9 +61,9 @@ def write_config():
     date_str = datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Jakarta')).strftime('%Y%m%d')
     ZIP_NAME = f"{GITHUB_RUN_ID}-{KERNEL_NAME}-kernel-{DEVICE}"
     if BUILD_TYPE == 'ksu':
-        ZIP_NAME += f"-resukisu"
+        ZIP_NAME += f"-bakasu"
     elif BUILD_TYPE == 'susfs':
-        ZIP_NAME += f"-resukisu-susfs"
+        ZIP_NAME += f"-bakasu-susfs"
     if SPOOF:
         ZIP_NAME += f"-spoof"
     ZIP_NAME += f"-{date_str}"
@@ -177,10 +177,10 @@ def append_config(config_name, arch=None, defconfig=None):
     DEFCONFIG_PATH = os.path.join(os.getcwd(), "kernel", "arch", os.environ.get('ARCH', arch), "configs", KERN_DEFCONFIG)
     if config_name == 'ksu':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
-            defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_MANUAL_HOOK=y\n')
+            defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# BakaSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_MANUAL_HOOK=y\n')
     elif config_name == 'susfs':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
-            defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# ReSukiSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_SUSFS=y\n')
+            defconfig_file.write('\n# NoMount\nCONFIG_NOMOUNT=y\n\n# BakaSU\nCONFIG_KERNELSU=y\nCONFIG_KSU_SUSFS=y\n')
     elif config_name == 'droidspaces':
         with open(DEFCONFIG_PATH, "a", encoding="utf-8") as defconfig_file:
             with open(os.path.join(os.getcwd(), "droidspaces_config"), 'r', encoding='utf-8') as f:

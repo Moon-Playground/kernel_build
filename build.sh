@@ -67,12 +67,12 @@ function do_patches(){
 		fi
 	fi
 	if [[ "$B_TYPE" == "ksu" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-BakaSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "ksu"
 		cd kernel
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	elif [[ "$B_TYPE" == "susfs" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-ReSukiSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
+		git -C kernel am --3way "$BASE_DIR"/patches/0001-gale-BakaSU-manual-hook.patch || { echo "Patch application failed!"; exit 1; }
 		git -C kernel am --3way "$BASE_DIR"/patches/0002-gale-Susfs-patch.patch || { echo "Patch application failed!"; exit 1; }
 		git -C kernel am --3way "$BASE_DIR"/patches/0003-gale-Adapt-susfs.patch || { echo "Patch application failed!"; exit 1; }
 		python main.py append_config "susfs"
@@ -124,9 +124,9 @@ function do_anykernel(){
 		fi
 		cd "$ZIP_DIR"
 		if [[ "$B_TYPE" == "ksu" ]]; then
-			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU for $DEVICE#g" anykernel.sh
+			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel BakaSU for $DEVICE#g" anykernel.sh
 		elif [[ "$B_TYPE" == "susfs" ]]; then
-			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel ReSukiSU+SusFS for $DEVICE#g" anykernel.sh
+			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel BakaSU+SusFS for $DEVICE#g" anykernel.sh
 		else
 			sed -i "s#kernel.string=#kernel.string=$KERNEL_NAME kernel for $DEVICE#g" anykernel.sh
 		fi
