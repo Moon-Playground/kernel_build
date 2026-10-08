@@ -70,7 +70,7 @@ jobs:
         if: ${{ inputs.build_type == 'ksu' || inputs.build_type == 'susfs' }}
         run: |
           cd kernel
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash
 
       - name: Write Config
         run: python main.py write_config
