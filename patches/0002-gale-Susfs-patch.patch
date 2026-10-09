@@ -1,16 +1,16 @@
-From e1728302455aa6ffa7bf68c786ceee22d2c19419 Mon Sep 17 00:00:00 2001
+From b14006cd169c51064ad37c899a75ef93bc86f712 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Wed, 7 Oct 2026 00:08:13 +0700
 Subject: [PATCH] gale: Susfs patch
 
 
 diff --git a/fs/Makefile b/fs/Makefile
-index c6e6932b1047..e67c5bfa2d33 100644
+index dac506e9a643..402abef69261 100644
 --- a/fs/Makefile
 +++ b/fs/Makefile
 @@ -15,6 +15,8 @@ obj-y :=	open.o read_write.o file_table.o super.o \
  		stack.o fs_struct.o statfs.o fs_pin.o nsfs.o \
- 		fs_context.o fs_parser.o fs_types.o
+ 		fs_context.o fs_parser.o
  
 +obj-$(CONFIG_KSU_SUSFS) += susfs.o
 +
@@ -2041,7 +2041,7 @@ index 29786598c2b5..47e323a195a7 100644
  	error = statfs_by_dentry(path->dentry, buf);
  	if (!error)
 diff --git a/fs/super.c b/fs/super.c
-index 4149d13d3002..cc31695d06c7 100644
+index 9d9a14c385d0..ea1685edf97e 100644
 --- a/fs/super.c
 +++ b/fs/super.c
 @@ -37,8 +37,16 @@
@@ -2061,7 +2061,7 @@ index 4149d13d3002..cc31695d06c7 100644
  static int thaw_super_locked(struct super_block *sb);
  
  static LIST_HEAD(super_blocks);
-@@ -1115,6 +1123,22 @@ int get_anon_bdev(dev_t *p)
+@@ -1104,6 +1112,22 @@ int get_anon_bdev(dev_t *p)
  {
  	int dev;
  
@@ -3650,7 +3650,7 @@ index 000000000000..7dca01d39281
 +
 diff --git a/include/linux/susfs.h b/include/linux/susfs.h
 new file mode 100644
-index 000000000000..4b9d7cc7a929
+index 000000000000..1e0ae0406083
 --- /dev/null
 +++ b/include/linux/susfs.h
 @@ -0,0 +1,243 @@
