@@ -1,4 +1,4 @@
-From a16a30d58c895afe8091319ce6b122ef982c9fab Mon Sep 17 00:00:00 2001
+From db7d2d634a5fc8b8c7a5740306f3fd2ac205300c Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Tue, 15 Sep 2026 11:12:02 +0700
 Subject: [PATCH] gale: Adapt susfs
@@ -85,10 +85,10 @@ index 9572bcc6bfdb..8368909981d2 100644
  #endif
  	return retval;
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 302f16914ed0..81b9a6855d02 100644
+index 22cd762870aa..fe9e14e8916f 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
-@@ -208,7 +208,7 @@ static void drop_mountpoint(struct fs_pin *p)
+@@ -207,7 +207,7 @@ static void drop_mountpoint(struct fs_pin *p)
  	pin_remove(p);
  	mntput(&m->mnt);
  }
@@ -97,12 +97,12 @@ index 302f16914ed0..81b9a6855d02 100644
  #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
  /* A copy of alloc_vfsmnt() but allocates the fake mnt_id for mounts
   * that are unshared by ksu process
-@@ -1107,7 +1107,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
+@@ -1106,7 +1106,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
  	//   for the sake of performance
  	if (static_branch_unlikely(&susfs_is_sdcard_android_data_not_decrypted)) {
  		if (susfs_is_current_ksu_domain()) {
--			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(name ?: "none");
-+			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(fc->source ?: "none");
+-			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(name ?:"none");
++			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(fc->source ?:"none");
  			goto bypass_orig_flow;
  		}
  	}
