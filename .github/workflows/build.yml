@@ -36,14 +36,11 @@ on:
 
 jobs:
   build_kernel:
-    name: Build ${{ inputs.build_type }}${{ matrix.spoof == true && '-spoof' || '' }}
+    name: Build ${{ inputs.build_type }}
     runs-on: ubuntu-24.04-arm
     container:
       image: fedora:44
       options: --privileged
-    strategy:
-      matrix:
-        spoof: [false, true]
     steps:
       - name: Checkout script
         uses: actions/checkout@v7
@@ -79,7 +76,6 @@ jobs:
           BUILD_TYPE: ${{ inputs.build_type }}
           KERNEL_IMG: ${{ inputs.kernel_img }}
           KERNEL_DTB: ${{ inputs.kernel_dtb }}
-          SPOOF: ${{ matrix.spoof }}
 
       - name: Setup Clang
         run: bash build.sh clang
@@ -105,14 +101,14 @@ jobs:
       - name: Upload vmlinux
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.build_type }}-vmlinux${{ matrix.spoof == true && '-spoof' || '' }}
+          name: ${{ inputs.build_type }}-vmlinux
           path: out/vmlinux
 
       - name: Upload logs
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.build_type }}-build-logs${{ matrix.spoof == true && '-spoof' || '' }}
+          name: ${{ inputs.build_type }}-build-logs
           path: Logs/
 
       - name: Release kernel
