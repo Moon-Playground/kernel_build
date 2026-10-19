@@ -71,6 +71,8 @@ jobs:
         run: |
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash
+          cd KernelSU
+          git checkout 10cada74698ccf7eed04d0e38bc7d624e5f54395
 
       - name: Write Config
         run: python main.py write_config
