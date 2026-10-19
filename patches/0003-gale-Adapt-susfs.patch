@@ -1,14 +1,14 @@
-From a16a30d58c895afe8091319ce6b122ef982c9fab Mon Sep 17 00:00:00 2001
+From fae65efb55421257280afcb2e675f7fa260e5d37 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Tue, 15 Sep 2026 11:12:02 +0700
 Subject: [PATCH] gale: Adapt susfs
 
 
 diff --git a/drivers/input/input.c b/drivers/input/input.c
-index e23479aed885..605723bd225c 100644
+index e23479aed885..ef487ee48187 100644
 --- a/drivers/input/input.c
 +++ b/drivers/input/input.c
-@@ -378,11 +378,22 @@ static int input_get_disposition(struct input_dev *dev,
+@@ -378,10 +378,19 @@ static int input_get_disposition(struct input_dev *dev,
  	return disposition;
  }
  
@@ -17,21 +17,18 @@ index e23479aed885..605723bd225c 100644
 +extern __attribute__((cold)) int ksu_handle_input_handle_event(
 +			unsigned int *type, unsigned int *code, int *value);
 +#endif
-+
  static void input_handle_event(struct input_dev *dev,
  			       unsigned int type, unsigned int code, int value)
  {
  	int disposition = input_get_disposition(dev, type, code, &value);
- 
 +#ifdef CONFIG_KSU_SUSFS
 +	if (static_branch_unlikely(&ksu_is_input_hook_enabled))
 +		ksu_handle_input_handle_event(&type, &code, &value);
 +#endif
-+
+ 
  	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN)
  		add_input_randomness(type, code, value);
- 
-@@ -444,21 +455,10 @@ static void input_handle_event(struct input_dev *dev,
+@@ -444,21 +453,10 @@ static void input_handle_event(struct input_dev *dev,
   * to 'seed' initial state of a switch or initial position of absolute
   * axis, etc.
   */
@@ -85,10 +82,10 @@ index 9572bcc6bfdb..8368909981d2 100644
  #endif
  	return retval;
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 302f16914ed0..81b9a6855d02 100644
+index 22cd762870aa..fe9e14e8916f 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
-@@ -208,7 +208,7 @@ static void drop_mountpoint(struct fs_pin *p)
+@@ -207,7 +207,7 @@ static void drop_mountpoint(struct fs_pin *p)
  	pin_remove(p);
  	mntput(&m->mnt);
  }
@@ -97,17 +94,17 @@ index 302f16914ed0..81b9a6855d02 100644
  #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
  /* A copy of alloc_vfsmnt() but allocates the fake mnt_id for mounts
   * that are unshared by ksu process
-@@ -1107,7 +1107,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
+@@ -1106,7 +1106,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
  	//   for the sake of performance
  	if (static_branch_unlikely(&susfs_is_sdcard_android_data_not_decrypted)) {
  		if (susfs_is_current_ksu_domain()) {
--			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(name ?: "none");
-+			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(fc->source ?: "none");
+-			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(name ?:"none");
++			mnt = susfs_alloc_non_unshare_ksu_vfsmnt(fc->source ?:"none");
  			goto bypass_orig_flow;
  		}
  	}
 diff --git a/fs/open.c b/fs/open.c
-index 264888b95df1..730d04c99b18 100644
+index 264888b95df1..3fe8c7c6678c 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -31,6 +31,9 @@
@@ -116,7 +113,7 @@ index 264888b95df1..730d04c99b18 100644
  #include <linux/compat.h>
 +#ifdef CONFIG_KSU_SUSFS
 +#include <linux/susfs_def.h>
-+#endif // #ifdef CONFIG_KSU_SUSFS
++#endif
  
  #include "internal.h"
  #include <trace/hooks/syscall_check.h>
@@ -214,10 +211,10 @@ index ffb68f805fda..a10a27f17ebf 100644
  	return ksys_read(fd, buf, count);
  }
 diff --git a/fs/stat.c b/fs/stat.c
-index 8b1bf9e55d20..2690b9ab5349 100644
+index 8b1bf9e55d20..c5f6ff548e05 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
-@@ -17,10 +17,21 @@
+@@ -17,10 +17,20 @@
  #include <linux/syscalls.h>
  #include <linux/pagemap.h>
  #include <linux/compat.h>
@@ -227,9 +224,7 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  
  #include <linux/uaccess.h>
  #include <asm/unistd.h>
--
-+#include "internal.h"
-+
+ 
 +#ifdef CONFIG_KSU_SUSFS
 +extern struct static_key_true ksu_is_init_rc_hook_enabled;
 +extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
@@ -240,23 +235,6 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
  extern bool susfs_is_inode_sus_kstat(struct inode *inode, bool *out_is_fuse);
  extern void susfs_sus_kstat_spoof_generic_fillattr(struct inode *inode, struct kstat *stat, u32 result_mask);
-@@ -80,7 +91,6 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
- 	stat->result_mask |= STATX_BASIC_STATS;
- 	request_mask &= STATX_ALL;
- 	query_flags &= KSTAT_QUERY_FLAGS;
--
- #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
- 	if (susfs_is_current_app_uid()) {
- 		bool is_fuse = false;
-@@ -109,7 +119,7 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
- 			}
- 			if (stat->result_mask & STATX_SUS_KSTAT_FUSE) {
- 				susfs_sus_kstat_spoof_generic_fillattr(inode, stat, STATX_SUS_KSTAT_FUSE);
--			return err;
-+				return err;
- 			}
- 		}
- 		return err;
 @@ -192,6 +202,10 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
  	if (f.file) {
  		error = vfs_getattr(&f.file->f_path, stat,
@@ -278,7 +256,7 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  
  	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
  		       AT_EMPTY_PATH | KSTAT_QUERY_FLAGS)) != 0)
-@@ -232,11 +249,31 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
+@@ -232,11 +249,33 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
  		lookup_flags |= LOOKUP_EMPTY;
  
  retry:
@@ -304,13 +282,15 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  
  	error = vfs_getattr(&path, stat, request_mask, flags);
 +#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-+	if (stat->result_mask & (STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT))
++	if (stat->result_mask & (STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT)) {
 +		stat->result_mask &= ~(STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT);
++		goto bypass_orig_flow;
++	}
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
  	path_put(&path);
  	if (retry_estale(error, lookup_flags)) {
  		lookup_flags |= LOOKUP_REVAL;
-@@ -402,17 +439,6 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
+@@ -402,17 +441,6 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
  
  	return cp_new_stat(&stat, statbuf);
  }
@@ -328,17 +308,18 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  
  #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
  SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
-@@ -421,9 +447,6 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+@@ -420,10 +448,6 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+ {
  	struct kstat stat;
  	int error;
- 
+-
 -#ifdef CONFIG_KSU_MANUAL_HOOK
 -	ksu_handle_stat(&dfd, &filename, &flag);
 -#endif
  	error = vfs_fstatat(dfd, filename, &stat, flag);
  	if (error)
  		return error;
-@@ -439,9 +462,6 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
+@@ -439,9 +463,6 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
  	if (!error)
  		error = cp_new_stat(&stat, statbuf);
  
@@ -348,7 +329,7 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  	return error;
  }
  
-@@ -568,9 +588,6 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
+@@ -568,9 +589,6 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
  	if (!error)
  		error = cp_new_stat64(&stat, statbuf);
  
@@ -358,7 +339,7 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  	return error;
  }
  
-@@ -580,9 +597,6 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
+@@ -580,9 +598,6 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
  	struct kstat stat;
  	int error;
  
