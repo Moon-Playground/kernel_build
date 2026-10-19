@@ -30,7 +30,6 @@ def write_config():
     KERNEL_IMG = os.environ.get('KERNEL_IMG', None)
     KERNEL_DTB = os.environ.get('KERNEL_DTB', None)
     BUILD_TYPE = os.environ.get('BUILD_TYPE', None)
-    SPOOF = str(os.environ.get('SPOOF', 'false')).lower() == 'true'
     KERNEL_IMG = f"{BASE_DIR}/out/arch/{ARCH}/boot/{KERNEL_IMG}" if ARCH and KERNEL_IMG else None
     KERNEL_DEFCONFIG = os.environ.get('KERNEL_DEFCONFIG', None)
     DTB_PATH = f"{BASE_DIR}/out/arch/{ARCH}/boot/dts/{KERNEL_DTB}" if ARCH and KERNEL_DTB else None
@@ -64,8 +63,7 @@ def write_config():
         ZIP_NAME += f"-bakasu"
     elif BUILD_TYPE == 'susfs':
         ZIP_NAME += f"-bakasu-susfs"
-    if SPOOF:
-        ZIP_NAME += f"-spoof"
+    ZIP_NAME += f"-spoof"
     ZIP_NAME += f"-{date_str}"
 
     print("New configuration:")
@@ -73,14 +71,12 @@ def write_config():
     print(f"KERNEL_IMG={KERNEL_IMG}")
     print(f"DEVICE={DEVICE}")
     print(f"BUILD_TYPE={BUILD_TYPE}")
-    print(f"SPOOF={SPOOF}")
     print(f"KERNEL_DEFCONFIG={KERNEL_DEFCONFIG}")
     print(f"DTB_PATH={DTB_PATH}")
     print(f"DTBO_PATH={DTBO_PATH}")
     print(f"ZIP_NAME={ZIP_NAME}")
 
     NEW_CONFIG = f'''export B_TYPE="{BUILD_TYPE}"
-export SPOOF="{SPOOF}"
 export DEVICE="{DEVICE}"
 export KERN_IMG="{KERNEL_IMG}"
 export DTB_PATH="{DTB_PATH}"
