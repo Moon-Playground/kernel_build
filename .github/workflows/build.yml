@@ -33,6 +33,11 @@ on:
                 required: false
                 default: 'mediatek/mt6768.dtb'
                 type: string
+            bakasu_branch:
+                description: 'BakaSu branch'
+                required: false
+                default: 'main'
+                type: string
 
 jobs:
   build_kernel:
@@ -67,7 +72,7 @@ jobs:
         if: ${{ inputs.build_type == 'ksu' || inputs.build_type == 'susfs' }}
         run: |
           cd kernel
-          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s -- sync-susfs
+          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/${{ inputs.bakasu_branch }}/kernel/setup.sh" | bash -s -- ${{ inputs.bakasu_branch }}
 
       - name: Write Config
         run: python main.py write_config

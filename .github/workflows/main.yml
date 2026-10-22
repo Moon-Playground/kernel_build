@@ -26,7 +26,11 @@ on:
         description: 'Kernel dtb name'
         required: false
         default: 'mediatek/mt6768.dtb'
-
+      bakasu_branch:
+        description: 'BakaSu branch'
+        required: false
+        default: 'main'
+        type: string
 
 jobs:
   build_normal:
@@ -51,6 +55,7 @@ jobs:
       kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
       kernel_img: ${{ github.event.inputs.kernel_img }}
       kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
+      bakasu_branch: ${{ github.event.inputs.bakasu_branch }}
     secrets: inherit
 
   build_susfs:
@@ -63,4 +68,5 @@ jobs:
       kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
       kernel_img: ${{ github.event.inputs.kernel_img }}
       kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
+      bakasu_branch: ${{ github.event.inputs.bakasu_branch }}
     secrets: inherit
