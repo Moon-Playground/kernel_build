@@ -5,7 +5,7 @@ source config.sh
 function parse_parameters() {
     while (($#)); do
         case $1 in
-            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | cleanup | release ) action=$1 ;;
+            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | cleanup | release | release_manager ) action=$1 ;;
             *) exit 33 ;;
         esac
         shift
@@ -141,7 +141,7 @@ function do_release() {
     # Upload to GitHub Releases using GitHub CLI
     file_name="$ZIP_NAME".zip
 
-    TAG="$DEVICE"-"$GITHUB_RUN_ID"
+    TAG="$GITHUB_RUN_ID"
     ASSET="$BASE_DIR/dist/$file_name"
     REPO="$GITHUB_REPOSITORY"
     DEVICE_TITLE="${DEVICE^}"
@@ -179,6 +179,37 @@ Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/run
 	echo "https://github.com/$REPO/releases/tag/$TAG"	
 }
 
+function do_release_manager() {
+	TAG="$GITHUB_RUN_ID"
+    REPO="$GITHUB_REPOSITORY"
+	TITLE="BakaSU Manager build: $TAG"
+	NOTES="BakaSU Manager Build"
+
+	for file in "$(pwd)/dist/*" ; do
+		if [[ "$file" == *.apk ]]; then
+			ASSET="$file"
+			BASENAME="$(basename "$file")"
+			if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
+				echo "Release $TAG exists, uploading asset..."
+				gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber
+			else
+				echo "Release $TAG does not exist, creating release and uploading asset..."
+				gh release create "$TAG" "$ASSET" \
+					--title "$TITLE" \
+					--notes "$NOTES" \
+					--target "$GITHUB_REF_NAME" \
+					--repo "$REPO" \
+					$PRERELEASE_FLAG || gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Release creation/upload failed!"; exit 1; }
+			fi
+			if [[ -n $UPLOAD_URL ]];then
+				python main.py upload "$BASENAME" "$UPLOAD_URL"
+			fi
+		fi
+	done
+    echo "Released successfully."
+	echo "https://github.com/$REPO/releases/tag/$TAG"
+}
+
 function do_help() {
     echo "Usage: $0 <command>"
     echo
@@ -188,6 +219,7 @@ function do_help() {
     echo "  anykernel  - Package kernel with AnyKernel installer"
     echo "  cleanup    - Remove build artifacts and temporary files"
     echo "  release    - Release package to github"
+    echo "  release_manager    - Release manager package to github"
     echo
     echo "Example:"
     echo "  $0 kernel   # Compile the kernel"

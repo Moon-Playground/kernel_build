@@ -33,23 +33,10 @@ on:
         type: string
 
 jobs:
-  build_normal:
-    name: Build Normal
-    uses: ./.github/workflows/build.yml
+  build_kernel:
+    name: Build kernel
+    uses: ./.github/workflows/kernel.yml
     with:
-      build_type: "normal"
-      kernel_repo: ${{ github.event.inputs.kernel_repo }}
-      kernel_branch: ${{ github.event.inputs.kernel_branch }}
-      kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
-      kernel_img: ${{ github.event.inputs.kernel_img }}
-      kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
-    secrets: inherit
-
-  build_ksu:
-    name: Build KernelSU
-    uses: ./.github/workflows/build.yml
-    with:
-      build_type: "ksu"
       kernel_repo: ${{ github.event.inputs.kernel_repo }}
       kernel_branch: ${{ github.event.inputs.kernel_branch }}
       kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
@@ -58,15 +45,10 @@ jobs:
       bakasu_branch: ${{ github.event.inputs.bakasu_branch }}
     secrets: inherit
 
-  build_susfs:
-    name: Build KernelSUS
-    uses: ./.github/workflows/build.yml
+  build_manager:
+    needs: [build_kernel]
+    name: Build BakaSU manager
+    uses: ./.github/workflows/manager.yml
     with:
-      build_type: "susfs"
-      kernel_repo: ${{ github.event.inputs.kernel_repo }}
-      kernel_branch: ${{ github.event.inputs.kernel_branch }}
-      kernel_defconfig: ${{ github.event.inputs.kernel_defconfig }}
-      kernel_img: ${{ github.event.inputs.kernel_img }}
-      kernel_dtb: ${{ github.event.inputs.kernel_dtb }}
       bakasu_branch: ${{ github.event.inputs.bakasu_branch }}
     secrets: inherit
