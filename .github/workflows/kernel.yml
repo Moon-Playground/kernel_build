@@ -3,11 +3,6 @@ name: Build Kernel
 on:
     workflow_call:
         inputs:
-            build_type:
-                description: 'Build type'
-                required: true
-                default: 'normal'
-                type: string
             kernel_repo:
                 description: 'Kernel repository to build'
                 required: true
@@ -41,11 +36,14 @@ on:
 
 jobs:
   build_kernel:
-    name: Build ${{ inputs.build_type }}
+    name: Build
     runs-on: ubuntu-24.04-arm
     container:
       image: fedora:44
       options: --privileged
+    strategy:
+      matrix:
+        build_type: [normal, ksu, susfs]
     steps:
       - name: Checkout script
         uses: actions/checkout@v7
@@ -69,7 +67,7 @@ jobs:
           submodules: "recursive"
 
       - name: Setup KernelSU
-        if: ${{ inputs.build_type == 'ksu' || inputs.build_type == 'susfs' }}
+        if: ${{ matrix.build_type == 'ksu' || matrix.build_type == 'susfs' }}
         run: |
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/${{ inputs.bakasu_branch }}/kernel/setup.sh" | bash -s -- ${{ inputs.bakasu_branch }}
@@ -78,7 +76,7 @@ jobs:
         run: python main.py write_config
         env:
           KERNEL_DEFCONFIG: ${{ inputs.kernel_defconfig }}
-          BUILD_TYPE: ${{ inputs.build_type }}
+          BUILD_TYPE: ${{ matrix.build_type }}
           KERNEL_IMG: ${{ inputs.kernel_img }}
           KERNEL_DTB: ${{ inputs.kernel_dtb }}
 
@@ -106,17 +104,18 @@ jobs:
       - name: Upload vmlinux
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.build_type }}-vmlinux
+          name: ${{ matrix.build_type }}-vmlinux
           path: out/vmlinux
 
       - name: Upload logs
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.build_type }}-build-logs
+          name: ${{ matrix.build_type }}-build-logs
           path: Logs/
 
-      - name: Release kernel
-        run: bash build.sh release
-        env:
-          UPLOAD_URL: ${{ secrets.UPLOAD_URL }}
+      - name: Upload kernel artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: kernel-${{ matrix.build_type }}
+          path: dist/*.zip

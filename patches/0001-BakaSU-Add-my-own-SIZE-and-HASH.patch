@@ -1,0 +1,59 @@
+From 34f4acffae723816cac4f3110ab3b08754889f3e Mon Sep 17 00:00:00 2001
+From: wulan17 <wulan17@komodos.id>
+Date: Fri, 23 Oct 2026 21:29:12 +0700
+Subject: [PATCH] BakaSU: Add my own SIZE and HASH
+
+
+diff --git a/kernel/manager/apk_sign.c b/kernel/manager/apk_sign.c
+index eba496d..34e0034 100644
+--- a/kernel/manager/apk_sign.c
++++ b/kernel/manager/apk_sign.c
+@@ -33,6 +33,7 @@ struct sdesc {
+ 
+ static apk_sign_key_t apk_sign_keys[] = {
+     { EXPECTED_SIZE_BAKASU, EXPECTED_HASH_BAKASU }, /* Baka-SU/BakaSU */
++    { EXPECTED_SIZE_WULAN17, EXPECTED_HASH_WULAN17 }, // wulan17
+ #ifdef CONFIG_KSU_MULTI_MANAGER_SUPPORT
+     { EXPECTED_SIZE_OFFICIAL, EXPECTED_HASH_OFFICIAL }, // tiann/KernelSU
+     { EXPECTED_SIZE_KOWX712, EXPECTED_HASH_KOWX712 }, // KOWX712/KernelSU
+diff --git a/kernel/manager/manager_sign.h b/kernel/manager/manager_sign.h
+index a940135..0206972 100644
+--- a/kernel/manager/manager_sign.h
++++ b/kernel/manager/manager_sign.h
+@@ -13,6 +13,10 @@
+ #define EXPECTED_SIZE_KOWX712 0x375
+ #define EXPECTED_HASH_KOWX712 "484fcba6e6c43b1fb09700633bf2fb4758f13cb0b2f4457b80d075084b26c588"
+ 
++// wulan17
++#define EXPECTED_SIZE_WULAN17 0x398
++#define EXPECTED_HASH_WULAN17 "e6d2dcd10d424426309dc8d447a5e4a385d6d112c1a7e8876fb4d31460061a0b"
++
+ typedef struct {
+     unsigned size;
+     const char *sha256;
+diff --git a/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt b/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt
+index 882b336..d1064c1 100644
+--- a/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt
++++ b/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt
+@@ -169,8 +169,16 @@ class KsuCliRepository(context: Context) {
+         val out = shell.newJob()
+             .add("${getKsuDaemonPath()} debug get-sign ${shellQuote(packageResourcePath)}")
+             .to(ArrayList<String>(), null).exec().out
+-        out.firstOrNull()?.trim()
+-            .orEmpty() == "size: 0x377, hash: d3469712b6214462764a1d8d3e5cbe1d6819a0b629791b9f4101867821f1df64"
++        val sign = out.firstOrNull()?.trim().orEmpty()
++
++        val officialSigns = setOf(
++            // BakaSU default
++            "size: 0x377, hash: d3469712b6214462764a1d8d3e5cbe1d6819a0b629791b9f4101867821f1df64",
++            // wulan17
++            "size: 0x398, hash: e6d2dcd10d424426309dc8d447a5e4a385d6d112c1a7e8876fb4d31460061a0b"
++        )
++
++        sign in officialSigns
+     }
+ 
+     suspend fun getFeatureStatus(feature: String): String = withContext(Dispatchers.IO) {
+-- 
+2.55.0
+

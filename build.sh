@@ -57,8 +57,8 @@ function do_bbg(){
 }
 
 function do_patches(){
-	git -C kernel config --local user.name "$KBUILD_BUILD_USER"
-	git -C kernel config --local user.email "$KBUILD_BUILD_USER@github.com"
+	git -C kernel config --global user.name "$KBUILD_BUILD_USER"
+	git -C kernel config --global user.email "$KBUILD_BUILD_USER@github.com"
 	cd "$BASE_DIR"
 	if [[ $(uname -m) == "aarch64" ]]; then
 		if [[ -f kernel/tools/build/cpio ]]; then
@@ -102,6 +102,9 @@ function do_localversion(){
 function do_kernel(){
 	mkdir -p "$BASE_DIR"/Logs
 
+	if [[ "$B_TYPE" == "ksu" || "$B_TYPE" == "susfs" ]]; then
+		git -C "$BASE_DIR"/kernel/KernelSU am --3way "$BASE_DIR"/patches/0001-BakaSU-Add-my-own-SIZE-and-HASH.patch || { echo "Patch application failed!"; exit 1; }
+	fi
 	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 -j"$CORES"  > >(tee ../Logs/stdout.log) 2> >(tee ../Logs/stderr.log) || { echo "Kernel build failed!"; exit 1; }
@@ -138,12 +141,9 @@ function do_anykernel(){
 }
 
 function do_release() {
-    # Upload to GitHub Releases using GitHub CLI
-    file_name="$ZIP_NAME".zip
-
-    TAG="$DEVICE"-"$GITHUB_RUN_ID"
-    ASSET="$BASE_DIR/dist/$file_name"
-    REPO="$GITHUB_REPOSITORY"
+	DEVICE="$(echo $KERNEL_DEFCONFIG | cut -d '_' -f 1)"
+	TAG="$DEVICE-$GITHUB_RUN_ID"
+	REPO="$GITHUB_REPOSITORY"
     DEVICE_TITLE="${DEVICE^}"
     TITLE="$DEVICE_TITLE ($(env TZ='UTC' date +%Y%m%d)) ($GITHUB_RUN_ID)"
     NOTES="""$KERNEL_NAME Kernel
@@ -152,31 +152,42 @@ Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)
 Build date: $(env TZ='UTC' date +%Y%m%d)
 Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"""
 
-    # Determine if this is a pre-release based on this repository's branch name
-    PRERELEASE_FLAG=""
-    if echo "${GITHUB_REF_NAME:-}" | grep -qiE '(dev|experimental)'; then
-        echo "Branch '${GITHUB_REF_NAME}' matched dev/experimental — marking as pre-release."
-        PRERELEASE_FLAG="--prerelease"
-    fi
-
-    # Check if release exists
-    if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
-        echo "Release $TAG exists, uploading asset..."
-        gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber
-    else
-        echo "Release $TAG does not exist, creating release and uploading asset..."
-        gh release create "$TAG" "$ASSET" \
-            --title "$TITLE" \
-            --notes "$NOTES" \
-            --target "$GITHUB_REF_NAME" \
-            --repo "$REPO" \
-            $PRERELEASE_FLAG || gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Release creation/upload failed!"; exit 1; }
-    fi
-	if [[ -n $UPLOAD_URL ]];then
-		python main.py upload "$file_name" "$UPLOAD_URL"
+	PRERELEASE_FLAG=""
+	if echo "${GITHUB_REF_NAME:-}" | grep -qiE '(dev|experimental)'; then
+		echo "Branch '${GITHUB_REF_NAME}' matched dev/experimental — marking as pre-release."
+		PRERELEASE_FLAG="--prerelease"
 	fi
-    echo "Released successfully."
-	echo "https://github.com/$REPO/releases/tag/$TAG"	
+
+	FIRST_ASSET=true
+	for file in "$(pwd)"/dist/* ; do
+		if [[ "$file" == *.zip ]] || [[ "$file" == *.apk ]]; then
+			ASSET="$file"
+			BASENAME="$(basename "$file")"
+			if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
+				echo "Release $TAG exists, uploading $BASENAME..."
+				gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber
+			else
+				if [[ "$FIRST_ASSET" == true ]]; then
+					echo "Creating release $TAG and uploading $BASENAME..."
+					gh release create "$TAG" "$ASSET" \
+						--title "$TITLE" \
+						--notes "$NOTES" \
+						--target "$GITHUB_REF_NAME" \
+						--repo "$REPO" \
+						$PRERELEASE_FLAG || gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Release creation/upload failed!"; exit 1; }
+					FIRST_ASSET=false
+				else
+					echo "Uploading $BASENAME to existing release..."
+					gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Upload failed!"; exit 1; }
+				fi
+			fi
+			if [[ -n $UPLOAD_URL ]]; then
+				python main.py upload "$BASENAME" "$UPLOAD_URL"
+			fi
+		fi
+	done
+	echo "Released successfully."
+	echo "https://github.com/$REPO/releases/tag/$TAG"
 }
 
 function do_help() {
@@ -187,7 +198,7 @@ function do_help() {
     echo "  kernel     - Compile  kernel sources"
     echo "  anykernel  - Package kernel with AnyKernel installer"
     echo "  cleanup    - Remove build artifacts and temporary files"
-    echo "  release    - Release package to github"
+    echo "  release    - Release all kernel and manager artifacts to github"
     echo
     echo "Example:"
     echo "  $0 kernel   # Compile the kernel"
