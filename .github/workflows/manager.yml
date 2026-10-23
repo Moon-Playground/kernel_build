@@ -1,0 +1,257 @@
+name: Build BakaSU manager
+
+on:
+    workflow_dispatch:
+        inputs:
+            bakasu_branch:
+                description: 'BakaSu branch'
+                required: true
+                default: 'main'
+                type: string
+    workflow_call:
+        inputs:
+            bakasu_branch:
+                description: 'BakaSu branch'
+                required: true
+                default: 'main'
+                type: string
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      spoofed_package_name: ${{ steps.pkg.outputs.spoofed_package_name }}
+    steps:
+      - name: Generate package name for spoofed manager
+        id: pkg
+        run: |
+          word1=$(tr -dc 'a-z' </dev/urandom | head -c6)
+          word2=$(tr -dc 'a-z' </dev/urandom | head -c6)
+          word3=$(tr -dc 'a-z' </dev/urandom | head -c6)
+          SPOOFED_PACKAGE_NAME="${word1}.${word2}.${word3}"
+          echo "spoofed_package_name=$SPOOFED_PACKAGE_NAME" >> $GITHUB_OUTPUT
+
+  build-lkm:
+    needs: prepare
+    uses: ./.github/workflows/build-lkm.yml
+    with:
+      bakasu_branch: ${{ inputs.bakasu_branch }}
+    secrets: inherit
+
+  build-ksuinit:
+    uses: ./.github/workflows/ksuinit.yml
+    with:
+      bakasu_branch: ${{ inputs.bakasu_branch }}
+
+  build-ksud:
+    needs: [build-lkm, build-ksuinit]
+    strategy:
+      matrix:
+        target:
+          - aarch64-linux-android
+          - x86_64-linux-android
+          - armv7-linux-androideabi
+          - riscv64-linux-android
+        os: [ubuntu-latest]
+    uses: ./.github/workflows/ksud.yml
+    with:
+      target: ${{ matrix.target }}
+      os: ${{ matrix.os }}
+      bakasu_branch: ${{ inputs.bakasu_branch }}
+
+  build-manager:
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    if: always() && needs.prepare.result == 'success'
+    defaults:
+      run:
+        working-directory: ./manager
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          repository: Baka-SU/BakaSU
+          ref: ${{ inputs.bakasu_branch }}
+          fetch-depth: 0
+
+      - name: Add Safe Directory
+        run: |
+          git config --global --add safe.directory "*"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add my own key
+        run: |
+          curl -LSs https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}/patches/0001-BakaSU-Add-my-own-SIZE-and-HASH.patch | git am --3way || { echo "Patch application failed!"; exit 1; }
+
+      - name: Determine commit for build
+        id: commit
+        run: echo "COMMIT_SHA=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Determine manager variant
+        id: determine
+        run: |
+          echo "title=Spoofed-Manager" >> $GITHUB_OUTPUT
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build APK
+        run: |
+          export KSU_NAME="MayuSU"
+          export KSU_PACKAGE_NAME="${{ needs.prepare.outputs.spoofed_package_name }}"
+          export BUILD_EXTRA_ARGS="-PKSU_PACKAGE_NAME=$KSU_PACKAGE_NAME -PKSU_NAME=$KSU_NAME -PIS_SPOOFED_BUILD=true"
+          ./gradlew assembleRelease -Pcommit=${{ steps.commit.outputs.COMMIT_SHA }} $BUILD_EXTRA_ARGS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.determine.outputs.title }}-gradle-release
+          path: manager/app/build/outputs/apk/release/*.apk
+
+      - name: Upload mappings
+        uses: actions/upload-artifact@v7
+        with:
+          name: "${{ steps.determine.outputs.title }}-mappings"
+          path: "manager/app/build/outputs/mapping/release/"
+          if-no-files-found: ignore
+
+  repack-manager:
+    if: always() && needs.build-manager.result == 'success' && needs.build-ksud.result == 'success'
+    needs: [build-manager, build-ksud, prepare]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          repository: Baka-SU/BakaSU
+          ref: ${{ inputs.bakasu_branch }}
+          fetch-depth: 0
+
+      - name: Add Safe Directory
+        run: |
+          git config --global --add safe.directory "*"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add my own key
+        run: |
+          curl -LSs https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}/patches/0001-BakaSU-Add-my-own-SIZE-and-HASH.patch | git am --3way || { echo "Patch application failed!"; exit 1; }
+
+      - name: Determine manager variant
+        id: determine
+        run: echo "title=Spoofed-Manager" >> $GITHUB_OUTPUT
+          
+      - name: Download artifact
+        uses: actions/download-artifact@v8
+        with:
+            name: ${{ steps.determine.outputs.title }}-gradle-release
+            path: artifacts/${{ steps.determine.outputs.title }}-gradle-release
+      
+      - name: Download arm64 ksud
+        uses: actions/download-artifact@v8
+        with:
+          name: ksud-aarch64-linux-android
+          path: artifacts/ksud-aarch64-linux-android
+
+      - name: Download x86_64 ksud
+        uses: actions/download-artifact@v8
+        with:
+          name: ksud-x86_64-linux-android
+          path: artifacts/ksud-x86_64-linux-android
+
+      - name: Download arm ksud
+        uses: actions/download-artifact@v8
+        with:
+          name: ksud-armv7-linux-androideabi
+          path: artifacts/ksud-armv7-linux-androideabi
+
+      - name: Download RISC-V ksud
+        uses: actions/download-artifact@v8
+        with:
+          name: ksud-riscv64-linux-android
+          path: artifacts/ksud-riscv64-linux-android
+
+
+      - name: Place manager apk and ksud artifacts
+        run: |
+          mkdir -p manager/app/build/outputs/apk/release
+          APKS=$(find artifacts/${{ steps.determine.outputs.title }}-gradle-release -type f -name "*.apk")
+          APKS=$(echo "$APKS" | tr '\n' ' ')
+          test -n "$APKS"
+          cp -f $APKS manager/app/build/outputs/apk/release/
+
+          mkdir -p target/aarch64-linux-android/release
+          mkdir -p target/armv7-linux-androideabi/release
+          mkdir -p target/x86_64-linux-android/release
+          mkdir -p target/riscv64-linux-android/release
+          ARM64_KSUD=$(find artifacts/ksud-aarch64-linux-android -type f -name ksud | head -n 1)
+          ARMV7_KSUD=$(find artifacts/ksud-armv7-linux-androideabi -type f -name ksud | head -n 1)
+          X86_64_KSUD=$(find artifacts/ksud-x86_64-linux-android -type f -name ksud | head -n 1)
+          RISCV64_KSUD=$(find artifacts/ksud-riscv64-linux-android -type f -name ksud | head -n 1)
+          test -n "$ARM64_KSUD"
+          test -n "$ARMV7_KSUD"
+          test -n "$X86_64_KSUD"
+          test -n "$RISCV64_KSUD"
+          cp -f "$ARM64_KSUD" target/aarch64-linux-android/release/ksud
+          cp -f "$ARMV7_KSUD" target/armv7-linux-androideabi/release/ksud
+          cp -f "$X86_64_KSUD" target/x86_64-linux-android/release/ksud
+          cp -f "$RISCV64_KSUD" target/riscv64-linux-android/release/ksud
+
+      - name: Clone credentials
+        uses: actions/checkout@v7
+        with:
+          repository: wulan17/credentials
+          path: credentials
+          ref: master
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-strict: "false"
+
+      - name: Setup keystore
+        run: |
+            mv credentials/wulan17.keystore key.jks
+            rm -rf credentials
+
+      - name: Prepare signing inputs
+        env:
+          PROD_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          PROD_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          PROD_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+            echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
+            echo "SIGN_KEY_ALIAS=$PROD_KEY_ALIAS" >> $GITHUB_ENV
+            echo "SIGN_KEYSTORE_PASSWORD=$PROD_KEYSTORE_PASSWORD" >> $GITHUB_ENV
+            echo "SIGN_KEY_PASSWORD=$PROD_KEY_PASSWORD" >> $GITHUB_ENV
+
+      - name: Repack and resign
+        run: |
+          python3 repack_apk_multi.py repack \
+            -b release \
+            -t release \
+            -a arm64-v8a \
+            -a armeabi-v7a \
+            -a x86_64 \
+            -a riscv64 \
+            -K "$SIGN_KEYSTORE_FILE" \
+            -A "$SIGN_KEY_ALIAS" \
+            -P "$SIGN_KEYSTORE_PASSWORD" \
+            -S "$SIGN_KEY_PASSWORD" \
+            --strip
+
+      - name: Delete gradle build
+        uses: GeekyEggo/delete-artifact@v6
+        with:
+          name: ${{ steps.determine.outputs.title }}-gradle-release
+
+      - name: Upload manager artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: manager-repacked
+          path: dist/*.apk

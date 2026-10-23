@@ -20,6 +20,9 @@ def load_config(cfg_path="config.sh"):
                     loaded[key] = value
     except FileNotFoundError:
         pass
+    if os.environ.get("BASE_DIR") in (None, "", "$(pwd)"):
+        os.environ["BASE_DIR"] = os.getcwd()
+        loaded["BASE_DIR"] = os.getcwd()
     return loaded
 
 def write_config():
