@@ -1,0 +1,116 @@
+name: Build ksud
+on:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+      os:
+        required: false
+        type: string
+        default: ubuntu-latest
+      pack_lkm:
+        required: false
+        type: boolean
+        default: true
+      pack_ksuinit:
+        required: false
+        type: boolean
+        default: true
+      use_cache:
+        required: false
+        type: boolean
+        default: true
+      bakasu_branch:
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    name: Build ksud (${{ inputs.target }})
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: Baka-SU/BakaSU
+          ref: ${{ inputs.bakasu_branch }}
+          fetch-depth: 0
+
+      - name: Add Safe Directory
+        run: |
+          git config --global --add safe.directory "*"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add my own key
+        run: |
+          curl -LSs https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}/patches/0001-BakaSU-Add-my-own-SIZE-and-HASH.patch | git am --3way || { echo "Patch application failed!"; exit 1; }
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+
+      - name: Prepare LKM fies
+        if: ${{ inputs.pack_lkm }}
+        run: |
+          cp aarch64-android*-lkm/*_kernelsu.ko ./userspace/ksud/bin/aarch64/
+          cp x86_64-android*-lkm/*_kernelsu.ko ./userspace/ksud/bin/x86_64/
+
+      - name: Prepare ksuinit
+        if: ${{ inputs.pack_ksuinit }}
+        run: |
+          mv ksuinit-aarch64/ksuinit ./userspace/ksud/bin/aarch64/
+          mv ksuinit-x86_64/ksuinit ./userspace/ksud/bin/x86_64/
+          mv ksuinit-riscv64/ksuinit ./userspace/ksud/bin/riscv64/
+          mv ksuinit-armv7/ksuinit ./userspace/ksud/bin/arm/
+
+      - name: Setup Rust toolchain
+        if: ${{ inputs.target != 'riscv64-linux-android' }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          targets: ${{ inputs.target }}
+          components: rust-src
+      
+      - name: Setup Rust toolchain
+        if: ${{ inputs.target == 'riscv64-linux-android' }}
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ksud-${{ inputs.target }}
+          workspaces: userspace/ksud
+          cache-directories: userspace/ksuinit
+          cache-targets: true
+          add-job-id-key: false
+          add-rust-environment-hash-key: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Setup cargo-ndk
+        if: ${{ inputs.target != 'riscv64-linux-android' }}
+        run: cargo install cargo-ndk --locked
+
+      - name: Assemble LKM bootstrap
+        run: |
+          clang --target=aarch64-linux-gnu -c -nostdlib \
+            -o userspace/ksud/.lkm_image_bootstrap.o \
+            userspace/ksud/src/lkm_image_bootstrap.S
+
+      - name: Build ksud
+        run: |
+          if [ "${{ inputs.target }}" == "riscv64-linux-android" ]; then
+            source .github/scripts/setup-rust-build.sh riscv64-linux-android 35
+            cd userspace/ksud/ 
+            cargo +nightly build -Z build-std=std,panic_abort --target "$TRIPLE" --release --manifest-path ./Cargo.toml --config ../../.github/riscv64-cargo.toml
+          else
+            cd userspace/ksud/
+            cargo ndk b -P 26 -t ${{ inputs.target }} -r -Z build-std-features="optimize_for_size" -Z trim-paths
+          fi
+
+      - name: Upload ksud artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ksud-${{ inputs.target }}
+          path: userspace/ksud/target/**/release/ksud*
