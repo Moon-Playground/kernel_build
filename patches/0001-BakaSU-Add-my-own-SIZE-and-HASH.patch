@@ -1,0 +1,191 @@
+From d19c7409e14baf6865086180c190097fabb89264 Mon Sep 17 00:00:00 2001
+From: wulan17 <wulan17@komodos.id>
+Date: Fri, 23 Oct 2026 21:29:12 +0700
+Subject: [PATCH] BakaSU: Add my own SIZE and HASH
+
+
+diff --git a/justfile b/justfile
+index 51bef76..79c9a8d 100644
+--- a/justfile
++++ b/justfile
+@@ -5,7 +5,7 @@ build_ksud:
+     cross build --target aarch64-linux-android --release --manifest-path ./userspace/ksud/Cargo.toml
+ 
+ build_manager: build_ksud
+-    cp userspace/ksud/target/aarch64-linux-android/release/ksud manager/app/src/main/jniLibs/arm64-v8a/libksud.so
++    cp userspace/ksud/target/aarch64-linux-android/release/ksud manager/app/src/main/jniLibs/arm64-v8a/libmsud.so
+     cd manager && ./gradlew aDebug
+ 
+ clippy:
+diff --git a/kernel/manager/apk_sign.c b/kernel/manager/apk_sign.c
+index eba496d..34e0034 100644
+--- a/kernel/manager/apk_sign.c
++++ b/kernel/manager/apk_sign.c
+@@ -33,6 +33,7 @@ struct sdesc {
+ 
+ static apk_sign_key_t apk_sign_keys[] = {
+     { EXPECTED_SIZE_BAKASU, EXPECTED_HASH_BAKASU }, /* Baka-SU/BakaSU */
++    { EXPECTED_SIZE_WULAN17, EXPECTED_HASH_WULAN17 }, // wulan17
+ #ifdef CONFIG_KSU_MULTI_MANAGER_SUPPORT
+     { EXPECTED_SIZE_OFFICIAL, EXPECTED_HASH_OFFICIAL }, // tiann/KernelSU
+     { EXPECTED_SIZE_KOWX712, EXPECTED_HASH_KOWX712 }, // KOWX712/KernelSU
+diff --git a/kernel/manager/manager_sign.h b/kernel/manager/manager_sign.h
+index a940135..0206972 100644
+--- a/kernel/manager/manager_sign.h
++++ b/kernel/manager/manager_sign.h
+@@ -13,6 +13,10 @@
+ #define EXPECTED_SIZE_KOWX712 0x375
+ #define EXPECTED_HASH_KOWX712 "484fcba6e6c43b1fb09700633bf2fb4758f13cb0b2f4457b80d075084b26c588"
+ 
++// wulan17
++#define EXPECTED_SIZE_WULAN17 0x398
++#define EXPECTED_HASH_WULAN17 "e6d2dcd10d424426309dc8d447a5e4a385d6d112c1a7e8876fb4d31460061a0b"
++
+ typedef struct {
+     unsigned size;
+     const char *sha256;
+diff --git a/manager/app/src/main/java/org/bakasu/bakasu/data/application/DynamicManagerRepository.kt b/manager/app/src/main/java/org/bakasu/bakasu/data/application/DynamicManagerRepository.kt
+index 7360c04..205fc11 100644
+--- a/manager/app/src/main/java/org/bakasu/bakasu/data/application/DynamicManagerRepository.kt
++++ b/manager/app/src/main/java/org/bakasu/bakasu/data/application/DynamicManagerRepository.kt
+@@ -35,7 +35,7 @@ class DynamicManagerRepository(
+                     .mapNotNull { packageInfo ->
+                         val nativeLibraryDir = packageInfo.nativeLibraryDir
+                         if (nativeLibraryDir.isNullOrBlank() ||
+-                            !File(nativeLibraryDir, "libksud.so").isFile
++                            !File(nativeLibraryDir, "libmsud.so").isFile
+                         ) {
+                             return@mapNotNull null
+                         }
+diff --git a/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt b/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt
+index 882b336..4c77791 100644
+--- a/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt
++++ b/manager/app/src/main/java/org/bakasu/bakasu/data/shell/KsuCli.kt
+@@ -49,7 +49,7 @@ class KsuCliRepository(context: Context) {
+         return library.absolutePath
+     }
+ 
+-    fun getKsuDaemonPath(): String = getNativeLibraryPath("ksud")
++    fun getKsuDaemonPath(): String = getNativeLibraryPath("msud")
+ 
+     /** Shared shells belong to this repository; callers must not close them. */
+     fun getRootShell(globalMnt: Boolean = false): Shell = synchronized(shellLock) {
+@@ -169,8 +169,16 @@ class KsuCliRepository(context: Context) {
+         val out = shell.newJob()
+             .add("${getKsuDaemonPath()} debug get-sign ${shellQuote(packageResourcePath)}")
+             .to(ArrayList<String>(), null).exec().out
+-        out.firstOrNull()?.trim()
+-            .orEmpty() == "size: 0x377, hash: d3469712b6214462764a1d8d3e5cbe1d6819a0b629791b9f4101867821f1df64"
++        val sign = out.firstOrNull()?.trim().orEmpty()
++
++        val officialSigns = setOf(
++            // BakaSU default
++            "size: 0x377, hash: d3469712b6214462764a1d8d3e5cbe1d6819a0b629791b9f4101867821f1df64",
++            // wulan17
++            "size: 0x398, hash: e6d2dcd10d424426309dc8d447a5e4a385d6d112c1a7e8876fb4d31460061a0b"
++        )
++
++        sign in officialSigns
+     }
+ 
+     suspend fun getFeatureStatus(feature: String): String = withContext(Dispatchers.IO) {
+diff --git a/manager/app/src/main/java/org/bakasu/bakasu/magica/AppZygotePreload.java b/manager/app/src/main/java/org/bakasu/bakasu/magica/AppZygotePreload.java
+index 5c4c29a..9c814b0 100644
+--- a/manager/app/src/main/java/org/bakasu/bakasu/magica/AppZygotePreload.java
++++ b/manager/app/src/main/java/org/bakasu/bakasu/magica/AppZygotePreload.java
+@@ -17,7 +17,7 @@ public class AppZygotePreload implements ZygotePreload {
+ 
+     @Override
+     public void doPreload(@NonNull ApplicationInfo appInfo) {
+-        File f = new File(appInfo.nativeLibraryDir, "libksud.so");
++        File f = new File(appInfo.nativeLibraryDir, "libmsud.so");
+         try {
+             System.loadLibrary("kernelsu");
+             Log.d(TAG, "executing magica ...");
+diff --git a/repack_apk.py b/repack_apk.py
+index 32876ed..d8482ca 100644
+--- a/repack_apk.py
++++ b/repack_apk.py
+@@ -221,7 +221,7 @@ def collect_existing_ksud_arches(apk_path: Path) -> List[str]:
+     seen = set()
+     with ZipFile(apk_path, "r") as zin:
+         for name in zin.namelist():
+-            if not (name.startswith("lib/") and name.endswith("/libksud.so")):
++            if not (name.startswith("lib/") and (name.endswith("/libksud.so") or name.endswith("/libmsud.so"))):
+                 continue
+             parts = name.split("/")
+             if len(parts) >= 3 and parts[1] and parts[1] not in seen:
+@@ -261,8 +261,8 @@ def repack_apk(
+                     if len(parts) >= 3 and parts[1] not in arch_filters:
+                         continue
+ 
+-                # Drop original libksud.so only for arches that have a replacement binary.
+-                if name.startswith("lib/") and name.endswith("/libksud.so"):
++                # Drop original libksud.so and libmsud.so for arches that have a replacement binary.
++                if name.startswith("lib/") and (name.endswith("/libksud.so") or name.endswith("/libmsud.so")):
+                     parts = name.split("/")
+                     if len(parts) >= 3 and parts[1] in ksud_bytes_by_arch:
+                         continue
+@@ -283,7 +283,7 @@ def repack_apk(
+                 ksud_bytes = ksud_bytes_by_arch.get(arch)
+                 if ksud_bytes is None:
+                     continue
+-                lib_path = f"lib/{arch}/libksud.so"
++                lib_path = f"lib/{arch}/libmsud.so"
+                 entry = ZipInfo(filename=lib_path)
+                 entry.compress_type = ZIP_DEFLATED
+                 zout.writestr(entry, ksud_bytes)
+@@ -292,10 +292,10 @@ def repack_apk(
+ def assert_required_libs(apk_path: Path, arch_filters: List[str]) -> None:
+     with ZipFile(apk_path, "r") as zf:
+         names = set(zf.namelist())
+-    missing = [arch for arch in arch_filters if f"lib/{arch}/libksud.so" not in names]
++    missing = [arch for arch in arch_filters if f"lib/{arch}/libmsud.so" not in names]
+     if missing:
+         raise RuntimeError(
+-            "Missing libksud.so in APK for architecture(s): " + ", ".join(missing)
++            "Missing libmsud.so in APK for architecture(s): " + ", ".join(missing)
+         )
+ 
+ 
+@@ -337,13 +337,13 @@ def do_repack(args: argparse.Namespace) -> int:
+         missing_in_apk = [arch for arch in missing_ksud_arches if arch not in existing_ksud_arches]
+         if missing_in_apk:
+             raise RuntimeError(
+-                "ksud binary not found and APK has no existing libksud.so for architecture(s): "
++                "ksud binary not found and APK has no existing libmsud.so for architecture(s): "
+                 + ", ".join(missing_in_apk)
+             )
+         print(
+             "[WARN] ksud binary not found for architecture(s): "
+             + ", ".join(missing_ksud_arches)
+-            + ". Using existing libksud.so from input APK.",
++            + ". Using existing libmsud.so from input APK.",
+             file=sys.stderr,
+         )
+ 
+@@ -460,7 +460,7 @@ def build_parser() -> argparse.ArgumentParser:
+         dest="strip",
+         action="store_true",
+         default=None,
+-        help="Strip libksud.so before packing (uses NDK llvm-strip)",
++        help="Strip libmsud.so before packing (uses NDK llvm-strip)",
+     )
+     strip_group.add_argument(
+         "--no-strip",
+diff --git a/repack_apk_multi.py b/repack_apk_multi.py
+index 6c919c9..8d705c2 100644
+--- a/repack_apk_multi.py
++++ b/repack_apk_multi.py
+@@ -74,7 +74,7 @@ def process_single_apk(apk_path: Path, args: argparse.Namespace, out_dir: Path)
+             raise RuntimeError(
+                 f"ksud binary not found for {apk_path.name} architecture(s): {', '.join(missing_in_apk)}"
+             )
+-        print(f"[WARN] {apk_path.name}: using existing libksud.so for {', '.join(missing_ksud_arches)}")
++        print(f"[WARN] {apk_path.name}: using existing libmsud.so for {', '.join(missing_ksud_arches)}")
+     
+     # Generate output filename
+     if args.output_name:
+-- 
+2.55.0
+
