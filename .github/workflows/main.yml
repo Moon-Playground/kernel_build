@@ -45,17 +45,10 @@ jobs:
       bakasu_branch: ${{ github.event.inputs.bakasu_branch }}
     secrets: inherit
 
-  build_manager:
-    name: Build BakaSU manager
-    uses: ./.github/workflows/manager.yml
-    with:
-      bakasu_branch: ${{ github.event.inputs.bakasu_branch }}
-    secrets: inherit
-
   release:
     name: Release to GitHub
-    needs: [build_kernel, build_manager]
-    if: always() && needs.build_kernel.result == 'success' && needs.build_manager.result == 'success'
+    needs: [build_kernel]
+    if: always() && needs.build_kernel.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -82,12 +75,6 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: kernel-susfs
-          path: dist/
-
-      - name: Download manager artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: manager-repacked
           path: dist/
 
       - name: Release all artifacts

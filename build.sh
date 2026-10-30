@@ -198,7 +198,7 @@ function do_help() {
     echo "  kernel     - Compile  kernel sources"
     echo "  anykernel  - Package kernel with AnyKernel installer"
     echo "  cleanup    - Remove build artifacts and temporary files"
-    echo "  release    - Release all kernel and manager artifacts to github"
+    echo "  release    - Release all kernel artifacts to github"
     echo
     echo "Example:"
     echo "  $0 kernel   # Compile the kernel"
