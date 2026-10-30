@@ -5,7 +5,7 @@ source config.sh
 function parse_parameters() {
     while (($#)); do
         case $1 in
-            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | cleanup | release ) action=$1 ;;
+            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | json | cleanup | release ) action=$1 ;;
             *) exit 33 ;;
         esac
         shift
@@ -102,9 +102,6 @@ function do_localversion(){
 function do_kernel(){
 	mkdir -p "$BASE_DIR"/Logs
 
-	if [[ "$B_TYPE" == "ksu" || "$B_TYPE" == "susfs" ]]; then
-		git -C "$BASE_DIR"/kernel/KernelSU am --3way "$BASE_DIR"/patches/0001-BakaSU-Add-my-own-SIZE-and-HASH.patch || { echo "Patch application failed!"; exit 1; }
-	fi
 	cd "$BASE_DIR"/kernel
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 "$KERN_DEFCONFIG" || { echo "Defconfig failed!"; exit 1; }
 	make O=../out CC=clang CXX=clang++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld LLVM=1 -j"$CORES"  > >(tee ../Logs/stdout.log) 2> >(tee ../Logs/stderr.log) || { echo "Kernel build failed!"; exit 1; }
@@ -138,6 +135,10 @@ function do_anykernel(){
 	else
 		return 1
 	fi
+}
+
+function do_json() {
+	python main.py kernel_info "$BASE_DIR"/kernel
 }
 
 function do_release() {
@@ -181,11 +182,11 @@ Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/run
 					gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber || { echo "Upload failed!"; exit 1; }
 				fi
 			fi
-			if [[ -n $UPLOAD_URL ]]; then
-				python main.py upload "$BASENAME" "$UPLOAD_URL"
-			fi
 		fi
 	done
+	if [[ -n $TELEGRAM_SESSION && -n $TELEGRAM_CHAT ]]; then
+		python main.py upload_tg "$(pwd)"/dist $PRERELEASE_FLAG
+	fi
 	echo "Released successfully."
 	echo "https://github.com/$REPO/releases/tag/$TAG"
 }
