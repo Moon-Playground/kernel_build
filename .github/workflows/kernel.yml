@@ -51,7 +51,9 @@ jobs:
       - name: Install dependencies
         run: |
           dnf update -y
-          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng
+          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng python python-pip
+          pip install --br gitpython tgcrypto-rs
+          pip install --br git+https://github.com/Mayuri-Chan/pyrofork.git@staging
 
       - name: Authenticate GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
@@ -101,6 +103,10 @@ jobs:
       - name: Compress AnyKernel
         run: bash build.sh anykernel
 
+      - name: Generate Json
+        if: ${{ matrix.build_type == 'susfs' }}
+        run: bash build.sh json
+
       - name: Upload vmlinux
         uses: actions/upload-artifact@v7
         with:
@@ -118,4 +124,4 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: kernel-${{ matrix.build_type }}
-          path: dist/*.zip
+          path: dist
