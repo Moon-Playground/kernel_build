@@ -56,6 +56,12 @@ jobs:
       - name: Checkout script
         uses: actions/checkout@v7
 
+      - name: Install dependencies
+        run: |
+          pip install --br gitpython tgcrypto-rs
+          pip install --br git+https://github.com/Mayuri-Chan/pyrofork.git@staging
+
+
       - name: Authenticate GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
@@ -80,5 +86,6 @@ jobs:
       - name: Release all artifacts
         run: bash build.sh release
         env:
-          UPLOAD_URL: ${{ secrets.UPLOAD_URL }}
           KERNEL_DEFCONFIG: ${{ inputs.kernel_defconfig }}
+          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
