@@ -1,6 +1,13 @@
+import asyncio
+import json
 import os
 import requests
 import sys
+
+from git import Repo
+from pathlib import Path
+from pyrogram import Client
+from pyrogram.types import InputMediaDocument
 
 def load_config(cfg_path="config.sh"):
     """Load exports from config.sh into os.environ and return a dict of values."""
@@ -201,6 +208,87 @@ def upload(file_name, url):
     except requests.exceptions.RequestException as e:
         print(f"An error occurred while uploading {file_name}: {e}")
 
+def get_kernel_info(kernel_path):
+    kernel_info = {}
+    version = None
+    patchlevel = None
+    sublevel = None
+    cip_version = None
+    st_version = None
+    ksu_rev = None
+    ksu_version = None
+    susfs_version = None
+    with open(kernel_path + "/Makefile", 'r') as f:
+        for line in f.read().split("\n"):
+            if line.startswith("VERSION"):
+                text = line.split()
+                version = text[2]
+            elif line.startswith("PATCHLEVEL"):
+                text = line.split()
+                patchlevel = text[2]
+            elif line.startswith("SUBLEVEL"):
+                text = line.split()
+                sublevel = text[2]
+            if version and patchlevel and sublevel:
+                break
+    if Path(kernel_path + "/localversion-cip").is_file():
+        with open(kernel_path + "/localversion-cip", 'r') as f:
+            cip_version = (f.read().split("\n")[0]).strip()
+        with open(kernel_path + "/localversion-st", 'r') as f:
+            st_version = (f.read().split("\n")[0]).strip()
+    kernel_version = f"{version}.{patchlevel}.{sublevel}"
+    if cip_version:
+        kernel_version = kernel_version + cip_version + st_version
+    if Path(kernel_path + "/KernelSU").is_dir():
+        repo = Repo(kernel_path + "/KernelSU")
+        ksu_rev = int(repo.git.rev_list("--count", "HEAD"))
+    ksu_version = 30000 + ksu_rev + 700
+    susfs_version = None
+    with open(kernel_path + "/include/linux/susfs.h", 'r') as f:
+        for line in f.read().split("\n"):
+            if line.startswith("#define SUSFS_VERSION"):
+                text = line.split()
+                susfs_version = text[2]
+    kernel_info["version"] = kernel_version
+    kernel_info["device"] = os.environ.get("DEVICE")
+    kernel_info["name"] = os.environ.get('KERNEL_NAME')
+    kernel_info["ksu_version"] = ksu_version
+    kernel_info["susfs_version"] = susfs_version
+    with open(os.environ.get("BASE_DIR") + "/dist/kernel_info.json", 'w') as f:
+        f.write(json.dumps(kernel_info))
+
+async def upload_tg(dir_path, prerelease=False):
+    client = Client("mahiru", session_string=os.environ.get("TELEGRAM_SESSION"), no_updates=True)
+    chat_id = os.environ.get("TELEGRAM_CHAT")
+    try:
+        chat_id = int(chat_id)
+    except Exception:
+        pass
+    files = []
+    path = Path(dir_path)
+    for f in path.iterdir():
+        if f.is_file() and not f.name.endswith(".json"):
+            files.append(
+                InputMediaDocument(
+                    media=f
+                )
+            )
+    kernel_info = None
+    with open("dist/kernel_info.json", 'r') as f:
+        kernel_info = json.loads(f.read())
+    caption = f"""New kernel build success
+🧬Kernel name: `{kernel_info['name']}`
+📱Device: `{kernel_info['device']}`
+📝Kernel version: `{kernel_info['version']}`
+📝BakaSU version: `{kernel_info['ksu_version']}`
+📝SusFS version: `{kernel_info['susfs_version']}`
+    """
+    if prerelease:
+        caption += "!!! Dev/Experimental Builds !!!"
+    files[-1].caption = caption
+    await client.send_media_group(chat_id, files)
+    await client.stop()
+
 def show_help():
     print(f"Usage: python {os.path.basename(__file__)} <argument>")
     print("")
@@ -228,6 +316,12 @@ def main():
             return
         config_name = sys.argv[2]
         append_config(config_name)
+    elif cmd == "kernel_info":
+        if len(sys.argv) < 3:
+            print("Please provide a path.")
+            return
+        kernel_path = sys.argv[2]
+        get_kernel_info(kernel_path)
     elif cmd == "upload":
         if len(sys.argv) < 4:
             print("Please provide a file name and upload URL.")
@@ -235,6 +329,15 @@ def main():
         file_name = sys.argv[2]
         url = sys.argv[3]
         upload(file_name, url)
+    elif cmd == "upload_tg":
+        if len(sys.argv) < 3:
+            print("Please provide a path.")
+            return
+        dir_path = sys.argv[2]
+        prerelease = False
+        if len(sys.argv) > 3 and sys.argv[3] == '--prerelease':
+            prerelease = True
+        asyncio.run(upload_tg(dir_path, prerelease))
     elif cmd == "help":
         show_help()
     else:
