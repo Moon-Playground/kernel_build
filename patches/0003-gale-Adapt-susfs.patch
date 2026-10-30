@@ -1,11 +1,11 @@
-From db7d2d634a5fc8b8c7a5740306f3fd2ac205300c Mon Sep 17 00:00:00 2001
+From e55ca768759b2c2f00e2994aea88c29cf733dc77 Mon Sep 17 00:00:00 2001
 From: wulan17 <wulan17@komodos.id>
 Date: Tue, 15 Sep 2026 11:12:02 +0700
 Subject: [PATCH] gale: Adapt susfs
 
 
 diff --git a/drivers/input/input.c b/drivers/input/input.c
-index e23479aed885..605723bd225c 100644
+index e23479aed..605723bd2 100644
 --- a/drivers/input/input.c
 +++ b/drivers/input/input.c
 @@ -378,11 +378,22 @@ static int input_get_disposition(struct input_dev *dev,
@@ -54,7 +54,7 @@ index e23479aed885..605723bd225c 100644
  	if (is_event_supported(type, dev->evbit, EV_MAX)) {
  
 diff --git a/fs/exec.c b/fs/exec.c
-index 9572bcc6bfdb..8368909981d2 100644
+index 9572bcc6b..836890998 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -1728,7 +1728,7 @@ static int exec_binprm(struct linux_binprm *bprm)
@@ -85,10 +85,10 @@ index 9572bcc6bfdb..8368909981d2 100644
  #endif
  	return retval;
 diff --git a/fs/namespace.c b/fs/namespace.c
-index 22cd762870aa..fe9e14e8916f 100644
+index f1c372b1c..a7a56272c 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
-@@ -207,7 +207,7 @@ static void drop_mountpoint(struct fs_pin *p)
+@@ -208,7 +208,7 @@ static void drop_mountpoint(struct fs_pin *p)
  	pin_remove(p);
  	mntput(&m->mnt);
  }
@@ -97,7 +97,7 @@ index 22cd762870aa..fe9e14e8916f 100644
  #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
  /* A copy of alloc_vfsmnt() but allocates the fake mnt_id for mounts
   * that are unshared by ksu process
-@@ -1106,7 +1106,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
+@@ -1107,7 +1107,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
  	//   for the sake of performance
  	if (static_branch_unlikely(&susfs_is_sdcard_android_data_not_decrypted)) {
  		if (susfs_is_current_ksu_domain()) {
@@ -107,7 +107,7 @@ index 22cd762870aa..fe9e14e8916f 100644
  		}
  	}
 diff --git a/fs/open.c b/fs/open.c
-index 264888b95df1..730d04c99b18 100644
+index 264888b95..730d04c99 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -31,6 +31,9 @@
@@ -186,7 +186,7 @@ index 264888b95df1..730d04c99b18 100644
  }
  
 diff --git a/fs/read_write.c b/fs/read_write.c
-index ffb68f805fda..a10a27f17ebf 100644
+index ffb68f805..a10a27f17 100644
 --- a/fs/read_write.c
 +++ b/fs/read_write.c
 @@ -586,17 +586,16 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
@@ -214,7 +214,7 @@ index ffb68f805fda..a10a27f17ebf 100644
  	return ksys_read(fd, buf, count);
  }
 diff --git a/fs/stat.c b/fs/stat.c
-index 8b1bf9e55d20..2690b9ab5349 100644
+index 8b1bf9e55..2690b9ab5 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -17,10 +17,21 @@
@@ -369,7 +369,7 @@ index 8b1bf9e55d20..2690b9ab5349 100644
  	if (error)
  		return error;
 diff --git a/kernel/reboot.c b/kernel/reboot.c
-index fe9468e84afb..fb2b675c79e1 100644
+index fe9468e84..fb2b675c7 100644
 --- a/kernel/reboot.c
 +++ b/kernel/reboot.c
 @@ -306,7 +306,7 @@ DEFINE_MUTEX(system_transition_mutex);
@@ -391,10 +391,10 @@ index fe9468e84afb..fb2b675c79e1 100644
  #endif
  	/* We only trust the superuser with rebooting the system. */
 diff --git a/kernel/sys.c b/kernel/sys.c
-index d4034c596c33..debcf3e57da8 100644
+index 7ab53d0f1..07efeabe7 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
-@@ -630,7 +630,7 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+@@ -642,7 +642,7 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
  }
  
  
@@ -403,7 +403,7 @@ index d4034c596c33..debcf3e57da8 100644
  extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
  #endif
  
-@@ -646,7 +646,7 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+@@ -658,7 +658,7 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
  	int retval;
  	kuid_t kruid, keuid, ksuid;
  
