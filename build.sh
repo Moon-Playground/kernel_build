@@ -80,13 +80,7 @@ function do_patches(){
 		curl https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh | bash -s master
 	fi
 
-
-	if [[ "$B_TYPE" == "susfs" ]]; then
-		git -C kernel am --3way "$BASE_DIR"/patches/susfs-uname-Add-support-for-fake-uname.patch || { echo "Patch application failed!"; exit 1; }
-	else
-		git -C kernel am --3way "$BASE_DIR"/patches/uname-Add-support-for-fake-uname.patch || { echo "Patch application failed!"; exit 1; }
-	fi
-	echo "CONFIG_FAKE_UNAME_5_10=y" >> "$BASE_DIR"/kernel/arch/"$ARCH"/configs/"$KERN_DEFCONFIG"
+	git -C kernel am --3way "$BASE_DIR"/patches/uname-Add-support-for-fake-uname.patch || { echo "Patch application failed!"; exit 1; }
 }
 
 function do_droidspaces(){
