@@ -58,6 +58,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt update && sudo apt install -y jq
           pip install --br gitpython tgcrypto-rs
           pip install --br git+https://github.com/Mayuri-Chan/pyrofork.git@staging
 

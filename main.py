@@ -215,9 +215,6 @@ def get_kernel_info(kernel_path):
     sublevel = None
     cip_version = None
     st_version = None
-    ksu_rev = None
-    ksu_version = None
-    susfs_version = None
     with open(kernel_path + "/Makefile", 'r') as f:
         for line in f.read().split("\n"):
             if line.startswith("VERSION"):
@@ -239,21 +236,41 @@ def get_kernel_info(kernel_path):
     kernel_version = f"{version}.{patchlevel}.{sublevel}"
     if cip_version:
         kernel_version = kernel_version + cip_version + st_version
+    kernel_info["version"] = kernel_version
+    kernel_info["device"] = os.environ.get("DEVICE")
+    kernel_info["name"] = os.environ.get('KERNEL_NAME')
+    kernel_info["repo"] = os.environ.get("KERNEL_REPO")
+    kernel_info["branch"] = os.environ.get("KERNEL_BRANCH")
+    kernel_info["sha"] = os.environ.get("SHA")
+    kernel_info["compiler"] = os.environ.get("COMPILER")
+    with open(os.environ.get("BASE_DIR") + "/dist/kernel_info.json", 'w') as f:
+        f.write(json.dumps(kernel_info))
+
+def get_ksu_info(kernel_path):
+    kernel_info = {}
+    with open(os.environ.get("BASE_DIR") + "/dist/kernel_info.json", 'r') as f:
+        kernel_info = json.loads(f.read())
+    ksu_rev = None
+    ksu_version = None
+    susfs_version = None
+    nomount_version = None
     if Path(kernel_path + "/KernelSU").is_dir():
         repo = Repo(kernel_path + "/KernelSU")
         ksu_rev = int(repo.git.rev_list("--count", "HEAD"))
     ksu_version = 30000 + ksu_rev + 700
-    susfs_version = None
     with open(kernel_path + "/include/linux/susfs.h", 'r') as f:
         for line in f.read().split("\n"):
             if line.startswith("#define SUSFS_VERSION"):
                 text = line.split()
                 susfs_version = text[2]
-    kernel_info["version"] = kernel_version
-    kernel_info["device"] = os.environ.get("DEVICE")
-    kernel_info["name"] = os.environ.get('KERNEL_NAME')
+    with open(kernel_path + '/NoMount/module/module.prop', 'r') as f:
+        for line in f.read().split("\n"):
+            if line.startswith("version="):
+                text = line.split("=")
+                nomount_version = text[1]
     kernel_info["ksu_version"] = ksu_version
     kernel_info["susfs_version"] = susfs_version.replace('"', '')
+    kernel_info["nomount_version"] = nomount_version.replace('"', '')
     with open(os.environ.get("BASE_DIR") + "/dist/kernel_info.json", 'w') as f:
         f.write(json.dumps(kernel_info))
 
@@ -276,19 +293,58 @@ async def upload_tg(dir_path, prerelease=False):
     kernel_info = None
     with open(dir_path + "/kernel_info.json", 'r') as f:
         kernel_info = json.loads(f.read())
-    caption = f"""New kernel build success
-🧬Kernel name: `{kernel_info['name']}`
-📱Device: `{kernel_info['device']}`
-📝Kernel version: `{kernel_info['version']}`
-📝BakaSU version: `{kernel_info['ksu_version']}`
-📝SusFS version: `{kernel_info['susfs_version']}`
-    """
+    caption = ""
     if prerelease:
-        caption += "!!! Dev/Experimental Builds !!!"
+        caption += "⚠️ **WARNING: Dev / Experimental Build!**\n"
+    caption += f"""
+🚀 **New Kernel Build Success!**
+
+🧬 **Kernel Name:** `{kernel_info['name']}`
+📱 **Device:** `{kernel_info['device']}`
+🏷️ **Version:** `{kernel_info['version']}`
+
+📦 **Repository:** `{kernel_info['repo']}`
+🌿 **Branch:** `{kernel_info['branch']}`
+💻 **Commit:** <a href='https://github.com/{kernel_info['repo']}/commits/{kernel_info['sha']}'>{kernel_info['sha']}</a>
+
+🔧 **BakaSU:** `{kernel_info['ksu_version']}`
+🛡️ **SusFS:** `{kernel_info['susfs_version']}`
+📂 **NoMount:** `{kernel_info['nomount_version']}`
+
+🔧 **Script Commit:** <a href='https://github.com/{os.environ.get('GITHUB_ACTOR')}/kernel_build/commit/{os.environ.get('GITHUB_SHA')}'>{os.environ.get('GITHUB_SHA')}</a>
+⚙️ **Compiler:** `{kernel_info['compiler']}`
+🛠️ **Workflow:** <a href='https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}'>{os.environ.get('GITHUB_RUN_ID')}</a>
+    """
     files[-1].caption = caption
     await client.start()
-    await client.send_media_group(chat_id, files)
+    try:
+        _ = await client.send_media_group(chat_id, files)
+    except Exception:
+        pass
     await client.stop()
+
+def gen_release_body(dir_path):
+    kernel_info = None
+    with open(dir_path + "/kernel_info.json", 'r') as f:
+        kernel_info = json.loads(f.read())
+    return f"""### 🚀 Build Information
+
+* **Kernel Name:** `{kernel_info['name']}`
+* **Device:** `{kernel_info['device']}`
+* **Version:** `{kernel_info['version']}`
+* **Repository:** [{kernel_info['repo']}](https://github.com/{kernel_info['repo']})
+* **Branch:** `{kernel_info['branch']}`
+* **Commit:** [`{kernel_info['sha'][:7]}`](https://github.com/{kernel_info['repo']}/commit/{kernel_info['sha']})
+
+### 🔧 Components & Toolchain
+
+* **BakaSU:** `{kernel_info['ksu_version']}`
+* **SusFS:** `{kernel_info['susfs_version']}`
+* **NoMount:** `{kernel_info['nomount_version']}`
+* **Script Commit:** [`{os.environ.get('GITHUB_SHA')}`](https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/commit/{os.environ.get('GITHUB_SHA')})
+* **Compiler:** `{kernel_info['compiler']}`
+* **Workflow:** [`{os.environ.get('GITHUB_RUN_ID')}`](https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')})
+    """
 
 def show_help():
     print(f"Usage: python {os.path.basename(__file__)} <argument>")
@@ -323,6 +379,12 @@ def main():
             return
         kernel_path = sys.argv[2]
         get_kernel_info(kernel_path)
+    elif cmd == "ksu_info":
+        if len(sys.argv) < 3:
+            print("Please provide a path.")
+            return
+        kernel_path = sys.argv[2]
+        get_ksu_info(kernel_path)
     elif cmd == "upload":
         if len(sys.argv) < 4:
             print("Please provide a file name and upload URL.")
@@ -330,6 +392,12 @@ def main():
         file_name = sys.argv[2]
         url = sys.argv[3]
         upload(file_name, url)
+    elif cmd == "release_body":
+        if len(sys.argv) < 3:
+            print("Please provide a path.")
+            return
+        dir_path = sys.argv[2]
+        print(gen_release_body(dir_path))
     elif cmd == "upload_tg":
         if len(sys.argv) < 3:
             print("Please provide a path.")
