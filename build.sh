@@ -5,7 +5,7 @@ source config.sh
 function parse_parameters() {
     while (($#)); do
         case $1 in
-            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | json | cleanup | release ) action=$1 ;;
+            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | kernel_info | ksu_info | cleanup | release ) action=$1 ;;
             *) exit 33 ;;
         esac
         shift
@@ -131,21 +131,25 @@ function do_anykernel(){
 	fi
 }
 
-function do_json() {
+function do_kernel_info() {
+	mkdir -p "$BASE_DIR"/dist
+	export KERNEL_REPO
+	export KERNEL_BRANCH
+	export COMPILER=$(clang --version | awk 'NR==1')
 	python main.py kernel_info "$BASE_DIR"/kernel
 }
 
+function do_ksu_info() {
+	python main.py ksu_info "$BASE_DIR"/kernel
+}
+
 function do_release() {
-	DEVICE="$(echo $KERNEL_DEFCONFIG | cut -d '_' -f 1)"
+	DEVICE=$(jq -r '.device' dist/kernel_info.json)
 	TAG="$DEVICE-$GITHUB_RUN_ID"
 	REPO="$GITHUB_REPOSITORY"
     DEVICE_TITLE="${DEVICE^}"
     TITLE="$DEVICE_TITLE ($(env TZ='UTC' date +%Y%m%d)) ($GITHUB_RUN_ID)"
-    NOTES="""$KERNEL_NAME Kernel
-Device: $DEVICE_TITLE
-Commit hash: $(git -C $BASE_DIR/kernel rev-parse HEAD)
-Build date: $(env TZ='UTC' date +%Y%m%d)
-Workflows id: [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"""
+    NOTES=$(python main.py release_body "$(pwd)"/dist)
 
 	PRERELEASE_FLAG=""
 	if echo "${GITHUB_REF_NAME:-}" | grep -qiE '(dev|experimental)'; then

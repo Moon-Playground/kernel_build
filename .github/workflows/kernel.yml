@@ -85,6 +85,13 @@ jobs:
       - name: Setup Clang
         run: bash build.sh clang
 
+      - name: Generate Kernel Info
+        if: ${{ matrix.build_type == 'susfs' }}
+        run: bash build.sh kernel_info
+        env:
+          KERNEL_REPO: ${{ inputs.kernel_repo }}
+          KERNEL_BRANCH: ${{ inputs.kernel_branch }}
+
       - name: Setup Baseband-guard
         run: bash build.sh bbg
 
@@ -103,9 +110,9 @@ jobs:
       - name: Compress AnyKernel
         run: bash build.sh anykernel
 
-      - name: Generate Json
+      - name: Generate KSU Info
         if: ${{ matrix.build_type == 'susfs' }}
-        run: bash build.sh json
+        run: bash build.sh ksu_info
 
       - name: Upload vmlinux
         uses: actions/upload-artifact@v7
