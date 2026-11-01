@@ -58,6 +58,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt update && sudo apt install -y jq
           pip install --br gitpython tgcrypto-rs
           pip install --br git+https://github.com/Mayuri-Chan/pyrofork.git@staging
 
@@ -89,3 +90,4 @@ jobs:
           KERNEL_DEFCONFIG: ${{ inputs.kernel_defconfig }}
           TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
           TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+          GH_WORKDIR: ${{ github.workspace }}
