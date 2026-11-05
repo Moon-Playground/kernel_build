@@ -8,6 +8,8 @@ sys: integrate spoof uname for BPF (bpfloader/netbpfload/netd)
 
 sys: bump spoofed uname to 5.10.239 for Android 16+ support
 
+sys: bump spoofed uname to 5.15.136
+
 diff --git a/kernel/sys.c b/kernel/sys.c
 index f8d52c9042fe..ad3da2c0bde8 100644
 --- a/kernel/sys.c
@@ -28,7 +30,7 @@ index f8d52c9042fe..ad3da2c0bde8 100644
 +				real_suffix++;
 +			}
 +
-+			snprintf(fake, sizeof(fake), "5.10.239%s", real_suffix);
++			snprintf(fake, sizeof(fake), "5.15.136%s", real_suffix);
 +			flen = strlen(fake) + 1;
 +
 +			if (len < flen)
