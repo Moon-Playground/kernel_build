@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         run: |
           dnf update -y
-          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng python python-pip
+          dnf install -y ccache wget bc make autoconf automake git bison pahole flex openssl-devel glibc-devel gcc gcc-c++ which zip jq cpio aria2 gh python3 python3-requests procps-ng python python-pip elfutils-libelf-devel zlib-devel libzstd-devel
           pip install --br gitpython tgcrypto-rs
           pip install --br git+https://github.com/Mayuri-Chan/pyrofork.git@staging
 
