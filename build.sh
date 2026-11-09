@@ -5,7 +5,7 @@ source config.sh
 function parse_parameters() {
     while (($#)); do
         case $1 in
-            help | clang | swap | bbg | patches | droidspaces | localversion | kernel | anykernel | kernel_info | ksu_info | cleanup | release ) action=$1 ;;
+            help | clang | swap | bbg | patches | localversion | kernel | anykernel | kernel_info | ksu_info | cleanup | release ) action=$1 ;;
             *) exit 33 ;;
         esac
         shift
@@ -81,11 +81,6 @@ function do_patches(){
 	fi
 
 	git -C kernel am --3way "$BASE_DIR"/patches/uname-Add-support-for-fake-uname.patch || { echo "Patch application failed!"; exit 1; }
-}
-
-function do_droidspaces(){
-	cd "$BASE_DIR"
-	python main.py append_config "droidspaces"
 }
 
 function do_localversion(){
