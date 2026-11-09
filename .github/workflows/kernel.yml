@@ -98,9 +98,6 @@ jobs:
       - name: Apply Patches
         run: bash build.sh patches
 
-      - name: Setup DroidSpaces
-        run: bash build.sh droidspaces
-
       - name: Setup Localversion
         run: bash build.sh localversion
 
