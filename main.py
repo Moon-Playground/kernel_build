@@ -1,9 +1,8 @@
 import asyncio
-import httpx
 import json
 import logging
+import niquests
 import os
-import requests
 import sys
 
 from git import Repo
@@ -11,7 +10,8 @@ from pathlib import Path
 from pyrogram import Client
 from pyrogram.types import InputMediaDocument
 
-logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("niquests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 def load_config(cfg_path="config.sh"):
     """Load exports from config.sh into os.environ and return a dict of values."""
@@ -199,12 +199,12 @@ def upload(file_name, url):
         'file': open(file_path, 'rb'),
     }
     try:
-        response = requests.post(url, files=files)
+        response = niquests.post(url, files=files)
         if response.status_code == 200:
             print(f"File {file_name} uploaded successfully.")
         else:
             print(f"Failed to upload {file_name}. Status code: {response.status_code}")
-    except requests.exceptions.RequestException as e:
+    except niquests.exceptions.RequestException as e:
         print(f"An error occurred while uploading {file_name}: {e}")
 
 def get_kernel_info(kernel_path):
@@ -353,52 +353,52 @@ def gen_release_body(dir_path):
 * **Workflow:** [`{os.environ.get('GITHUB_RUN_ID')}`](https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')})
     """
 
-async def download_chunk(client: httpx.AsyncClient, url: str, start: int, end: int, chunk_id: int, filename: str):
-    """Downloads a specific byte range of the file and writes it to the correct offset."""
+async def download_chunk(session: niquests.AsyncSession, url: str, start: int, end: int, chunk_id: int, filename: str):
+    """Downloads a specific byte range using Niquests async streaming."""
     headers = {"Range": f"bytes={start}-{end}"}
 
-    # Use streaming to avoid loading the entire chunk into RAM at once
-    async with client.stream("GET", url, headers=headers) as response:
-        response.raise_for_status()
+    # stream=True ensures we stream chunks safely into storage without RAM spikes
+    response = await session.get(url, headers=headers, stream=True)
+    response.raise_for_status()
 
-        # Open the file in r+b mode so we can seek and write concurrently without overwriting other parts
-        with open(filename, "r+b") as f:
-            f.seek(start)
-            async for chunk in response.aiter_bytes(chunk_size=1024 * 64):
-                f.write(chunk)
+    # Open file in r+b to allow concurrent offset writing
+    with open(filename, "r+b") as f:
+        f.seek(start)
+        # Niquests uses response.iter_content instead of aiter_bytes
+        for chunk in response.iter_content(chunk_size=1024 * 64):
+            f.write(chunk)
 
     print(f"✓ Chunk {chunk_id} finished ({start}-{end})")
 
 async def download(URL, OUTPUT_FILE, CHUNKS = 16):
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        # 1. Get the total file size using a HEAD request
-        response = await client.head(URL)
+    # multiplexed=True forces Niquests to run connections in parallel over HTTP/2 or HTTP/3
+    async with niquests.AsyncSession(multiplexed=True) as session:
+        # 1. Request headers only to fetch the file size
+        response = await session.head(URL)
         if response.headers.get("Accept-Ranges") == "none":
-            print("Server does not support split downloads. Downloading normally...")
-            # Fallback to normal download code here if needed
+            print("Server does not support split downloads.")
             return
             
         total_size = int(response.headers["Content-Length"])
-        print(f"Total file size: {total_size / (1024*1024):.2f} MB. Splitting into {CHUNKS} parts...")
+        print(f"Total file size: {total_size / (1024*1024):.2f} MB. Downloading via Niquests...")
 
-        # 2. Pre-allocate the file on disk so chunks can write to specific offsets safely
+        # 2. Pre-allocate the physical file on disk
         with open(OUTPUT_FILE, "wb") as f:
             f.truncate(total_size)
 
-        # 3. Calculate byte ranges for each split
+        # 3. Formulate chunk constraints
         chunk_size = total_size // CHUNKS
         tasks = []
         
         for i in range(CHUNKS):
             start = i * chunk_size
-            # The last chunk handles any remaining bytes due to integer division
             end = total_size - 1 if i == CHUNKS - 1 else (start + chunk_size - 1)
             
-            tasks.append(download_chunk(client, URL, start, end, i + 1, OUTPUT_FILE))
+            tasks.append(download_chunk(session, URL, start, end, i + 1, OUTPUT_FILE))
 
-        # 4. Run all download tasks concurrently
+        # 4. Fire them concurrently
         await asyncio.gather(*tasks)
-        print("🎉 Download completed successfully!")
+        print("🎉 Niquests parallel download completed successfully!")
 
 def show_help():
     print(f"Usage: python {os.path.basename(__file__)} <argument>")
