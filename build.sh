@@ -15,7 +15,7 @@ function parse_parameters() {
 function do_clang(){
 	if [[ -n $BUCKET_URL ]]; then
 		echo 'Downloading clang from buckets'
-		python main.py download "$BUCKET_URL" "$CLANG_NAME" || { echo "Download failed!"; exit 1; }
+		python main.py download "$BUCKET_URL" "$CLANG_NAME" || python main.py download "$CLANG_URL" "$CLANG_NAME" || { echo "Download failed!"; exit 1; }
 	else
 		echo 'Downloading clang from url'
 		python main.py download "$CLANG_URL" "$CLANG_NAME" || { echo "Download failed!"; exit 1; }
