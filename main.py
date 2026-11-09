@@ -1,5 +1,7 @@
 import asyncio
+import httpx
 import json
+import logging
 import os
 import requests
 import sys
@@ -8,6 +10,8 @@ from git import Repo
 from pathlib import Path
 from pyrogram import Client
 from pyrogram.types import InputMediaDocument
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def load_config(cfg_path="config.sh"):
     """Load exports from config.sh into os.environ and return a dict of values."""
@@ -349,6 +353,53 @@ def gen_release_body(dir_path):
 * **Workflow:** [`{os.environ.get('GITHUB_RUN_ID')}`](https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')})
     """
 
+async def download_chunk(client: httpx.AsyncClient, url: str, start: int, end: int, chunk_id: int, filename: str):
+    """Downloads a specific byte range of the file and writes it to the correct offset."""
+    headers = {"Range": f"bytes={start}-{end}"}
+
+    # Use streaming to avoid loading the entire chunk into RAM at once
+    async with client.stream("GET", url, headers=headers) as response:
+        response.raise_for_status()
+
+        # Open the file in r+b mode so we can seek and write concurrently without overwriting other parts
+        with open(filename, "r+b") as f:
+            f.seek(start)
+            async for chunk in response.aiter_bytes(chunk_size=1024 * 64):
+                f.write(chunk)
+
+    print(f"✓ Chunk {chunk_id} finished ({start}-{end})")
+
+async def download(URL, OUTPUT_FILE, CHUNKS = 16):
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        # 1. Get the total file size using a HEAD request
+        response = await client.head(URL)
+        if response.headers.get("Accept-Ranges") == "none":
+            print("Server does not support split downloads. Downloading normally...")
+            # Fallback to normal download code here if needed
+            return
+            
+        total_size = int(response.headers["Content-Length"])
+        print(f"Total file size: {total_size / (1024*1024):.2f} MB. Splitting into {CHUNKS} parts...")
+
+        # 2. Pre-allocate the file on disk so chunks can write to specific offsets safely
+        with open(OUTPUT_FILE, "wb") as f:
+            f.truncate(total_size)
+
+        # 3. Calculate byte ranges for each split
+        chunk_size = total_size // CHUNKS
+        tasks = []
+        
+        for i in range(CHUNKS):
+            start = i * chunk_size
+            # The last chunk handles any remaining bytes due to integer division
+            end = total_size - 1 if i == CHUNKS - 1 else (start + chunk_size - 1)
+            
+            tasks.append(download_chunk(client, URL, start, end, i + 1, OUTPUT_FILE))
+
+        # 4. Run all download tasks concurrently
+        await asyncio.gather(*tasks)
+        print("🎉 Download completed successfully!")
+
 def show_help():
     print(f"Usage: python {os.path.basename(__file__)} <argument>")
     print("")
@@ -388,6 +439,13 @@ def main():
             return
         kernel_path = sys.argv[2]
         get_ksu_info(kernel_path)
+    elif cmd == "download":
+        if len(sys.argv) < 4:
+            print("Please provide a url and a output file.")
+            return
+        url = sys.argv[2]
+        output = sys.argv[3]
+        asyncio.run(download(url, output))
     elif cmd == "upload":
         if len(sys.argv) < 4:
             print("Please provide a file name and upload URL.")
