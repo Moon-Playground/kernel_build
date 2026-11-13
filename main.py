@@ -3,12 +3,13 @@ import json
 import logging
 import niquests
 import os
+import re
 import sys
 
 from git import Repo
 from pathlib import Path
 from pyrogram import Client
-from pyrogram.types import InputMediaDocument
+from pyrogram.types import InputMediaDocument, InlineKeyboardMarkup, InlineKeyboardButton
 
 logging.getLogger("niquests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -277,6 +278,22 @@ def get_ksu_info(kernel_path):
     with open(os.environ.get("BASE_DIR") + "/dist/kernel_info.json", 'w') as f:
         f.write(json.dumps(kernel_info))
 
+async def upload_r2(file_path, file_name, url, token):
+    workflow_id = os.environ.get('GITHUB_RUN_ID')
+    headers = {"Authorization": f"Bearer {token}"}
+    data = {"workflow_id": workflow_id}
+    files = {
+        "file": (
+            file_name, open(file_path, 'rb')
+        )
+    }
+    async with niquests.AsyncSession() as session:
+        resp = await session.post(url, headers=headers, data=data, files=files)
+        if resp.status_code == 200:
+            return resp.json()["download"]
+        else:
+            print("Upload failed")
+
 async def upload_tg(dir_path, prerelease=False):
     client = Client("mahiru", session_string=os.environ.get("TELEGRAM_SESSION"), no_updates=True)
     chat_id = os.environ.get("TELEGRAM_CHAT")
@@ -285,14 +302,19 @@ async def upload_tg(dir_path, prerelease=False):
     except Exception:
         pass
     files = []
+    links = {}
     path = Path(dir_path)
     for f in path.iterdir():
         if f.is_file() and f.name.endswith(".zip"):
-            files.append(
-                InputMediaDocument(
-                    media=f
-                )
-            )
+            r2 = await upload_r2(f, f.name, os.environ.get("R2_URL"), os.environ.get("R2_TOKEN"))
+            if r2:
+                if re.search(r"bakasu", f.name):
+                    if re.search(r"susfs", f.name):
+                        links["susfs"] = r2
+                    else:
+                        links["ksu"] = r2
+                else:
+                    links["normal"] = r2
     kernel_info = None
     with open(dir_path + "/kernel_info.json", 'r') as f:
         kernel_info = json.loads(f.read())
@@ -320,10 +342,14 @@ async def upload_tg(dir_path, prerelease=False):
 ⚙️ **Compiler:** `{kernel_info['compiler']}`
 🛠️ **Workflow:** <a href='https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}'>{os.environ.get('GITHUB_RUN_ID')}</a>
     """
-    files[-1].caption = caption
+    btn = [
+        InlineKeyboardButton(text="Non-KSU", url=links["normal"]),
+        InlineKeyboardButton(text="KSU", url=links["ksu"]),
+        InlineKeyboardButton(text="SusFS", url=links["susfs"])
+    ]
     await client.start()
     try:
-        _ = await client.send_media_group(chat_id, files)
+        _ = await client.send_message(chat_id, caption, reply_markup=InlineKeyboardMarkup([btn]))
     except Exception:
         pass
     await client.stop()
