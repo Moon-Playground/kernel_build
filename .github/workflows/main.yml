@@ -91,3 +91,5 @@ jobs:
           TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
           TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
           GH_WORKDIR: ${{ github.workspace }}
+          R2_TOKEN: ${{ secrets.R2_TOKEN }}
+          R2_URL: ${{ secrets.R2_URL }}
